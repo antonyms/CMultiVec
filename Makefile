@@ -5,7 +5,7 @@ CC = g++
 CFLAGS = -O2 -Wall -std=c++11 -g
 OBJECTS = cmultivec.o
 INCFLAGS =
-LDFLAGS = -lboost_filesystem -lboost_system -g
+LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -g
 LIBS = 
 
 all: CMultiVec

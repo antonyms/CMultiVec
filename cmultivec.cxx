@@ -26,45 +26,51 @@
 #include <cstdio>
 #include <algorithm>
 #include <numeric>
+#include <sstream>
 
 #include <sys/resource.h>
 
 #include <boost/filesystem.hpp>
-#include <boost/unordered_map.hpp>
 #include <boost/circular_buffer.hpp>
-#include <boost/array.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/numeric/ublas/matrix.hpp>
+#include <boost/numeric/ublas/matrix_proxy.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/program_options.hpp>
 
 #define VECDIM 50
-#define CSIZE 5
 #define EODWORD "eeeoddd"
-typedef boost::array<float,VECDIM> wvec;
 
-void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const std::vector<wvec>& origvects, std::vector<FILE*>& outfiles) {
-	float idfc[2*CSIZE+1]; //idf context window
+namespace ub = boost::numeric::ublas;
+namespace po = boost::program_options;
+
+typedef ub::matrix_row<const ub::matrix<float> > wvec;
+
+void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const ub::matrix<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize) {
+	float idfc[2*contextsize+1]; //idf context window
 
 	//Look up the idfs of the words in context
 	std::transform(context.begin(),context.end(),idfc,[&idfs](int c) ->float {return idfs[c];});
 
-	float idfsum=std::accumulate(idfc,&idfc[CSIZE],0)+std::accumulate(&idfc[CSIZE+1],&idfc[2*CSIZE+1],0);
+	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],0);
 	float invidfsum=1/idfsum;
 
-	wvec tot;
+	std::vector<float> tot(vecdim);
 
-	for(int i=0; i<CSIZE; i++) {
-		wvec cont=origvects[context[i]];
+	for(unsigned int i=0; i<contextsize; i++) {
+		const  wvec cont(origvects,context[i]);
 		float idfterm=idfc[i]*invidfsum;
 		std::transform(tot.begin(), tot.end(), cont.begin(), tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
 	}
-	for(int i=CSIZE+1; i<2*CSIZE+1; i++) {
-		wvec cont=origvects[context[i]];
+	for(unsigned int i=contextsize+1; i<2*contextsize+1; i++) {
+		const wvec cont(origvects,context[i]);
 		float idfterm=idfc[i]*invidfsum;
 		std::transform(tot.begin(), tot.end(), cont.begin(), tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
 	}
 
 	//now tot will contain the context representation of the middle vector
-	int midid=context[CSIZE]; 
-	fwrite(tot.begin(),sizeof(float),VECDIM,outfiles[midid]);
+	int midid=context[contextsize]; 
+	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
 }
 
 int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word) {
@@ -76,14 +82,14 @@ int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const st
 	return index->second;
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
-	std::vector<wvec> origvects;
-
+	ub::matrix<float> origvects(5,vecdim);
+	
 	std::string word;
-	int index=0;
+	unsigned int index=0;
 	while(getline(vocabstream,word)) {
 		vocab.push_back(word);
 		vocabmap[word]=index++;
@@ -92,11 +98,13 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		tfidfstream >>tf;
 		idfs.push_back(tf);
 
-		wvec v;
-		for(int i=0; i<VECDIM; i++) {
-			vectorstream>>v[i];
+		if(index<=origvects.size1()) {
+			origvects.resize(origvects.size1()*2,vecdim);
 		}
-		origvects.push_back(v);
+		
+		for(int i=0; i<VECDIM; i++) {
+			vectorstream>>origvects(index,i);
+		}
 	}
 
 	vocabstream.close();
@@ -139,15 +147,15 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		std::cout << "Reading corpus file " << path << std::endl;
 
 		//Keeps track of the accumulated contexts of the previous 5 words, the current word, and the next 5 words
-		boost::circular_buffer<int > context(2*CSIZE+1);
+		boost::circular_buffer<int > context(2*contextsize+1);
 
 		do {
 			context.clear();
-			for(int i=0; i<CSIZE; i++) {
+			for(unsigned int i=0; i<contextsize; i++) {
 				context.push_back(startdoci);
 			}
 			std::string word;
-			for(int i=0; i<CSIZE+1; i++) {
+			for(unsigned int i=0; i<contextsize+1; i++) {
 				if(getline(corpusreader,word)) {
 					if(word==EODWORD) goto EOD;
 					int wind=lookup_word(vocabmap,word);
@@ -157,17 +165,20 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 
 			while(getline(corpusreader,word)) {
 				if(word==EODWORD) goto EOD;
-				compute_and_output_context(context, idfs, origvects,outfiles);
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
 				context.pop_front();
 				int newind=lookup_word(vocabmap,word);
 				context.push_back(newind);
 			}
 			EOD:
-			for(int i=0; i<CSIZE; i++) {
-				if(context.size()==2*CSIZE+1) {
-					compute_and_output_context(context, idfs, origvects,outfiles);
-					context.pop_front();
-				}
+			unsigned int k=0;
+			while(context.size()<2*contextsize+1) {
+					context.push_back(enddoci);
+					k++;
+			}
+			for(; k<contextsize; k++) {
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
+				context.pop_front();
 				context.push_back(enddoci);
 			}
 		} while(!corpusreader.eof());
@@ -180,49 +191,76 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	return 0;
 }
 
-void print_usage()
-{
-	std::cout<< "Usage: CMultiVec vocab.txt frequencies.tfidf original.vectors inputdif outputdir" <<std::endl;
-}
-
 
 int main(int argc, char** argv) {
-	if(argc!=6) {
-		print_usage();
-		return 1;
-	}
 
-	std::ifstream vocab(argv[1]);
+	std::string vocabf;
+	std::string idff;
+	std::string vecf;
+	std::string corpusd;
+	std::string outd;
+	int dim;
+	unsigned int contextsize;
+	po::options_description desc("Command Line Options");
+	desc.add_options()
+    ("help,h", "produce help message")
+    ("vocab,v", po::value<std::string>(&vocabf)->required(), "vocab file")
+	("idf,i", po::value<std::string>(&idff)->required(), "idf file")
+	("vec,w", po::value<std::string>(&vecf)->required(), "word vectors file")
+	("corpus,c", po::value<std::string>(&corpusd)->required(), "corpus directory")
+	("outdir,o", po::value<std::string>(&outd)->required(), "output directory")
+	("dim,d", po::value<int>(&dim)->default_value(50),"word vector dimension")
+	("contextsize,s", po::value<unsigned int>(&contextsize)->default_value(5),"size of context (# of words before and after)")
+;
+
+	
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+
+	if (vm.count("help")) {
+            std::cout << desc << "\n";
+            return 0;
+   }
+
+	try {
+		po::notify(vm);
+	} catch(po::required_option& exception) {
+		std::cerr << "Error: " << exception.what() << "\n";
+		std::cout << desc << "\n";
+        return 1;
+	}
+	
+	std::ifstream vocab(vocabf);
 	if(!vocab.good()) {
 		std::cerr << "Vocab file no good" <<std::endl;
 		return 2;
 	}
 
-	std::ifstream frequencies(argv[2]);
+	std::ifstream frequencies(idff);
 	if(!frequencies.good()) {
 		std::cerr << "Frequencies file no good" <<std::endl;
 		return 3;
 	}
 
-	std::ifstream vectors(argv[3]);
+	std::ifstream vectors(vecf);
 	if(!vectors.good()) {
 		std::cerr << "Vectors file no good" <<std::endl;
 		return 4;
 	}
 
-	std::string indir(argv[4]);
+	std::string indir(corpusd);
 	if(!boost::filesystem::is_directory(indir)) {
 		std::cerr << "Input directory does not exist" <<std::endl;
 		return 5;
 	}
 
-	std::string outdir(argv[5]);
+	std::string outdir(outd);
 	if(!boost::filesystem::is_directory(outdir)) {
 		std::cerr << "Input directory does not exist" <<std::endl;
 		return 6;
 	}
 
-	return extract_contexts(vocab, frequencies, vectors, indir,outdir);
+	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize);
 }
 
 
