@@ -98,7 +98,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		tfidfstream >>tf;
 		idfs.push_back(tf);
 
-		if(index<=origvects.size1()) {
+		if(index>=origvects.size1()) {
 			origvects.resize(origvects.size1()*2,vecdim);
 		}
 		
