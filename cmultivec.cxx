@@ -38,7 +38,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
 
-#define VECDIM 50
+
 #define EODWORD "eeeoddd"
 
 namespace ub = boost::numeric::ublas;
@@ -102,7 +102,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 			origvects.resize(origvects.size1()*2,vecdim);
 		}
 		
-		for(int i=0; i<VECDIM; i++) {
+		for(int i=0; i<vecdim; i++) {
 			vectorstream>>origvects(index,i);
 		}
 	}
