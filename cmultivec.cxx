@@ -33,20 +33,14 @@
 #include <boost/filesystem.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/unordered_map.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-#include <boost/numeric/ublas/matrix_proxy.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
 
-
 #define EODWORD "eeeoddd"
 
-namespace ub = boost::numeric::ublas;
-namespace po = boost::program_options;
+namespace po=boost::program_options;
 
-typedef ub::matrix_row<const ub::matrix<float> > wvec;
-
-void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const ub::matrix<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize) {
+void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const std::vector<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize) {
 	float idfc[2*contextsize+1]; //idf context window
 
 	//Look up the idfs of the words in context
@@ -58,14 +52,12 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	std::vector<float> tot(vecdim);
 
 	for(unsigned int i=0; i<contextsize; i++) {
-		const  wvec cont(origvects,context[i]);
 		float idfterm=idfc[i]*invidfsum;
-		std::transform(tot.begin(), tot.end(), cont.begin(), tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
+		std::transform(tot.begin(), tot.end(),&origvects[context[i]*vecdim], tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
 	}
 	for(unsigned int i=contextsize+1; i<2*contextsize+1; i++) {
-		const wvec cont(origvects,context[i]);
 		float idfterm=idfc[i]*invidfsum;
-		std::transform(tot.begin(), tot.end(), cont.begin(), tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
+		std::transform(tot.begin(), tot.end(),&origvects[context[i]*vecdim], tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
 	}
 
 	//now tot will contain the context representation of the middle vector
@@ -82,11 +74,11 @@ int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const st
 	return index->second;
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
-	ub::matrix<float> origvects(5,vecdim);
+	std::vector<float> origvects(5*vecdim);
 	
 	std::string word;
 	unsigned int index=0;
@@ -98,12 +90,12 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		tfidfstream >>tf;
 		idfs.push_back(tf);
 
-		if(index>=origvects.size1()) {
-			origvects.resize(origvects.size1()*2,vecdim);
+		if((index+1)*vecdim>origvects.size()) {
+			origvects.resize(origvects.size()*2,vecdim);
 		}
 		
 		for(int i=0; i<vecdim; i++) {
-			vectorstream>>origvects(index,i);
+			vectorstream>>origvects[index*vecdim+i];
 		}
 	}
 
@@ -157,14 +149,14 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 			std::string word;
 			for(unsigned int i=0; i<contextsize+1; i++) {
 				if(getline(corpusreader,word)) {
-					if(word==EODWORD) goto EOD;
+					if(word==eodmarker) goto EOD;
 					int wind=lookup_word(vocabmap,word);
 					context.push_back(wind);
 				}
 			}
 
 			while(getline(corpusreader,word)) {
-				if(word==EODWORD) goto EOD;
+				if(word==eodmarker) goto EOD;
 				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
 				context.pop_front();
 				int newind=lookup_word(vocabmap,word);
@@ -184,10 +176,12 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		} while(!corpusreader.eof());
 	}
 	std::cout << "Closing files" <<std::endl;
+	/* Not necessary, since exiting properly will clean up anyway (And is much faster)
 	for(unsigned int i=0; i<vocab.size(); i++) {
 		if(i%1000==0) std::cout<< "Closing file " << i <<std::endl;
 		fclose(outfiles[i]);
 	}
+	*/  
 	return 0;
 }
 
@@ -201,6 +195,7 @@ int main(int argc, char** argv) {
 	std::string outd;
 	int dim;
 	unsigned int contextsize;
+	std::string eod;
 	po::options_description desc("Command Line Options");
 	desc.add_options()
     ("help,h", "produce help message")
@@ -211,6 +206,8 @@ int main(int argc, char** argv) {
 	("outdir,o", po::value<std::string>(&outd)->required(), "output directory")
 	("dim,d", po::value<int>(&dim)->default_value(50),"word vector dimension")
 	("contextsize,s", po::value<unsigned int>(&contextsize)->default_value(5),"size of context (# of words before and after)")
+	("eodmarker,e",po::value<std::string>(&eod)->default_value("eeeoddd"),"end of document marker");
+		
 ;
 
 	
@@ -260,7 +257,7 @@ int main(int argc, char** argv) {
 		return 6;
 	}
 
-	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize);
+	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod);
 }
 
 
