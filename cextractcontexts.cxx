@@ -40,7 +40,11 @@
 
 namespace po=boost::program_options;
 
-void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const std::vector<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize) {
+void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const std::vector<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize, int prune) {
+	int midid=context[contextsize]; 
+	if(midid>=prune) {
+		return;
+	}
 	float idfc[2*contextsize+1]; //idf context window
 
 	//Look up the idfs of the words in context
@@ -61,7 +65,6 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	}
 
 	//now tot will contain the context representation of the middle vector
-	int midid=context[contextsize]; 
 	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
 }
 
@@ -76,7 +79,7 @@ int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const st
 		return index->second;}
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker, bool indexed) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker, bool indexed,unsigned int prune) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
@@ -109,15 +112,19 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	int startdoci=lookup_word(vocabmap,"<s>",false);
 	int enddoci=lookup_word(vocabmap,"<\\s>",false);
 
+	unsigned int vsize=vocab.size();
 
+	if(prune && prune <vsize) {
+		vsize=prune;
+	}
 	//set limit of open files high enough to open a file for every word in the dictionary.
 	rlimit lim;
-	lim.rlim_cur=vocab.size()+1024; //1024 extra files just to be safe;
-	lim.rlim_max=vocab.size()+1024;
+	lim.rlim_cur=vsize+1024; //1024 extra files just to be safe;
+	lim.rlim_max=vsize+1024;
 	setrlimit(RLIMIT_NOFILE , &lim);
 	
-	std::vector<FILE*> outfiles(vocab.size());
-	for(unsigned int i=0; i<vocab.size(); i++) {
+	std::vector<FILE*> outfiles(vsize);
+	for(unsigned int i=0; i<vsize; i++) {
 		std::ostringstream s;
 		s<<outdir<<"/"<< i << ".vectors";
 		outfiles[i]=fopen(s.str().c_str(),"w");
@@ -159,7 +166,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 
 			while(getline(corpusreader,word)) {
 				if(word==eodmarker) goto EOD;
-				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,prune);
 				context.pop_front();
 				int newind=lookup_word(vocabmap,word,indexed);
 				context.push_back(newind);
@@ -171,7 +178,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 					k++;
 			}
 			for(; k<contextsize; k++) {
-				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,prune);
 				context.pop_front();
 				context.push_back(enddoci);
 			}
@@ -198,18 +205,20 @@ int main(int argc, char** argv) {
 	int dim;
 	unsigned int contextsize;
 	std::string eod;
+	unsigned int prune=0;
 	po::options_description desc("CExtractContexts Options");
 	desc.add_options()
     ("help,h", "produce help message")
-    ("vocab,v", po::value<std::string>(&vocabf)->required(), "vocab file")
-	("idf,i", po::value<std::string>(&idff)->required(), "idf file")
-	("vec,w", po::value<std::string>(&vecf)->required(), "word vectors file")
-	("corpus,c", po::value<std::string>(&corpusd)->required(), "corpus directory")
-	("outdir,o", po::value<std::string>(&outd)->required(), "output directory")
-	("dim,d", po::value<int>(&dim)->default_value(50),"word vector dimension")
-	("contextsize,s", po::value<unsigned int>(&contextsize)->default_value(5),"size of context (# of words before and after)")
-	("eodmarker,e",po::value<std::string>(&eod)->default_value("eeeoddd"),"end of document marker")
-	("preindexed","indicates the corpus is pre-indexed with the vocab file");
+    ("vocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "vocab file")
+	("idf,i", po::value<std::string>(&idff)->value_name("<filename>")->required(), "idf file")
+	("vec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "word vectors file")
+	("corpus,c", po::value<std::string>(&corpusd)->value_name("<directory>")->required(), "corpus directory")
+	("outdir,o", po::value<std::string>(&outd)->value_name("<directory>")->required(), "output directory")
+	("dim,d", po::value<int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
+	("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
+	("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
+	("preindexed","indicates the corpus is pre-indexed with the vocab file")
+	("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab") ;
 		
 
 	
@@ -259,7 +268,7 @@ int main(int argc, char** argv) {
 		return 6;
 	}
 
-	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod,vm.count("preindexed")>0);
+	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod,vm.count("preindexed")>0,prune);
 }
 
 
