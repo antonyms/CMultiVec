@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
 	("idf,i", po::value<std::string>(&idff)->value_name("<filename>")->required(), "idf file")
 	("vec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "word vectors file")
 	("corpus,c", po::value<std::string>(&corpusd)->value_name("<directory>")->required(), "corpus directory")
-	("outdir,o", po::value<std::string>(&outd)->value_name("<directory>")->required(), "output directory")
+	("outdir,o", po::value<std::string>(&outd)->value_name("<directory>")->required(), "directory to output contexts")
 	("dim,d", po::value<int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
 	("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
 	("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
