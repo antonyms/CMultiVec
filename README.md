@@ -52,7 +52,7 @@ concatenated and there is no padding.
 
 
 # Citations
-
+````
 @inproceedings{HuangEtAl2012,
 author = {Eric H. Huang and Richard Socher and Christopher D. Manning and Andrew Y. Ng},
 title = {Improving Word Representations via Global Context and Multiple Word Prototypes},
@@ -70,3 +70,4 @@ year = 2012
   pages     = {801--805},
   year      = {2013}
 }
+````
