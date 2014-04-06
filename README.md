@@ -14,7 +14,7 @@ The goal is to make multi-protype representations more accessible.
 
 ### Requirements
 * C++11
-* Boost (filesystem, program options)
+* Boost (filesystem, program options, iostreams)
 
 ### Optional
 

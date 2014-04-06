@@ -66,7 +66,12 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 
 	//now tot will contain the context representation of the middle vector
 	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
+	for(unsigned int i=0; i<vecdim; i++) {
+		std::cout<<tot[i]<< " ";
+	}
+	std::cout <<std::endl;
 }
+
 
 int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed) {
 	if(indexed) {
@@ -185,12 +190,14 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 		} while(!corpusreader.eof());
 	}
 	std::cout << "Closing files" <<std::endl;
-	/* Not necessary, since exiting properly will clean up anyway (And is much faster)
-	for(unsigned int i=0; i<vocab.size(); i++) {
+	/*
+	// Not necessary, since exiting properly will clean up anyway (And is much faster)
+	for(unsigned int i=0; i<vsize; i++) {
 		if(i%1000==0) std::cout<< "Closing file " << i <<std::endl;
 		fclose(outfiles[i]);
 	}
-	*/  
+	*/
+	
 	return 0;
 }
 
