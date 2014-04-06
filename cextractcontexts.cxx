@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
 	int dim;
 	unsigned int contextsize;
 	std::string eod;
-	po::options_description desc("Command Line Options");
+	po::options_description desc("CExtractContexts Options");
 	desc.add_options()
     ("help,h", "produce help message")
     ("vocab,v", po::value<std::string>(&vocabf)->required(), "vocab file")
