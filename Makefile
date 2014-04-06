@@ -2,16 +2,16 @@
 ## Created by Anjuta
 
 CC = g++
-CFLAGS = -O2 -Wall -std=c++11 -g 
-OBJECTS = cmultivec.o
+CFLAGS = -O2 -Wall -std=c++11
+OBJECTS = cextractcontexts.o
 INCFLAGS =
-LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -g
+LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options
 LIBS = 
 
-all: CMultiVec
+all: CExtractContexts
 
-CMultiVec: $(OBJECTS)
-	$(CC) -o CMultiVec $(OBJECTS) $(LDFLAGS) $(LIBS)
+CExtractContexts: $(OBJECTS)
+	$(CC) -o CExtractContexts $(OBJECTS) $(LDFLAGS) $(LIBS)
 
 .SUFFIXES:
 .SUFFIXES:	.c .cc .C .cpp .cxx .o
