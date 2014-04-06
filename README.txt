@@ -1,4 +1,4 @@
-#Overview
+# Overview
 CMultiVec is a (currenly incomplete) set of tools for training vector representations 
 of words, with multiple prototypes per word.  It is based on Huang Socher 2012.  It 
 is designed to be as fast as possible.
@@ -11,11 +11,11 @@ XXXX: A tool for re-labelling words in context with their appropriate representa
 
 The goal is to make multi-protype representations more accessible.
 
-###Requirements
+### Requirements
 * C++11
 * Boost (filesystem, program options)
 
-###Optional
+### Optional
 
 * MLPack
 
@@ -28,30 +28,30 @@ allow you to open more files simultaneously. Adding a line like
 
 and logging back in should do the trick.
 
-#Data formats
+# Data formats
 
-##Vocabulary File
+## Vocabulary File
 Text file, one word per line.
 
-##idf File
+## idf File
 Text file, one floating point value per line.  This will be the inverse document frequency weighting
 of the word in the corresponding line of the vocab file.  
 See https://en.wikipedia.org/wiki/Tf%E2%80%93idf for more information.
 
-##Vectors File
+## Vectors File
 Text File, D whitespace-separated floating point values per line, where D is the dimension of the word
 representation vectors.  Each line corresponds to the representation of the same line in the vocab.
 
-##Corpus Directory
+## Corpus Directory
 Directory containing an arbitrary number of .txt files.  All of them will be processed.
 
-##Context Directory
+## Context Directory
 Binary files named N.bin which contain the contexts of the Nth word in the vocabulary.
 Contains a list of tfidf-weighted context vectors.  Each vector is D IEEE-754 floats. The vectors are just
 concatenated and there is no padding.
 
 
-#Citations
+# Citations
 
 @inproceedings{HuangEtAl2012,
 author = {Eric H. Huang and Richard Socher and Christopher D. Manning and Andrew Y. Ng},
