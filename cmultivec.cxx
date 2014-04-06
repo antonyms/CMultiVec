@@ -65,16 +65,18 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
 }
 
-int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word) {
-	boost::unordered_map<std::string,int>::const_iterator index=vocabmap.find(word);
-	if(index==vocabmap.end()) {
-		return 0;  //Unknown words are mapped to 0, so the first word in your vocab better be unknown
-	}
-
-	return index->second;
+int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed) {
+	if(indexed) {
+		return std::stoi(word);
+	} else {
+		boost::unordered_map<std::string,int>::const_iterator index=vocabmap.find(word);
+		if(index==vocabmap.end()) {
+			return 0;  //Unknown words are mapped to 0, so the first word in your vocab better be unknown
+		}
+		return index->second;}
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker, bool indexed) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
@@ -104,8 +106,8 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	vectorstream.close();
 
 
-	int startdoci=lookup_word(vocabmap,"<s>");
-	int enddoci=lookup_word(vocabmap,"<\\s>");
+	int startdoci=lookup_word(vocabmap,"<s>",false);
+	int enddoci=lookup_word(vocabmap,"<\\s>",false);
 
 
 	//set limit of open files high enough to open a file for every word in the dictionary.
@@ -150,7 +152,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 			for(unsigned int i=0; i<contextsize+1; i++) {
 				if(getline(corpusreader,word)) {
 					if(word==eodmarker) goto EOD;
-					int wind=lookup_word(vocabmap,word);
+					int wind=lookup_word(vocabmap,word,indexed);
 					context.push_back(wind);
 				}
 			}
@@ -159,7 +161,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 				if(word==eodmarker) goto EOD;
 				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize);
 				context.pop_front();
-				int newind=lookup_word(vocabmap,word);
+				int newind=lookup_word(vocabmap,word,indexed);
 				context.push_back(newind);
 			}
 			EOD:
@@ -206,9 +208,9 @@ int main(int argc, char** argv) {
 	("outdir,o", po::value<std::string>(&outd)->required(), "output directory")
 	("dim,d", po::value<int>(&dim)->default_value(50),"word vector dimension")
 	("contextsize,s", po::value<unsigned int>(&contextsize)->default_value(5),"size of context (# of words before and after)")
-	("eodmarker,e",po::value<std::string>(&eod)->default_value("eeeoddd"),"end of document marker");
+	("eodmarker,e",po::value<std::string>(&eod)->default_value("eeeoddd"),"end of document marker")
+	("preindexed","indicates the corpus is pre-indexed with the vocab file");
 		
-;
 
 	
     po::variables_map vm;
@@ -257,7 +259,7 @@ int main(int argc, char** argv) {
 		return 6;
 	}
 
-	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod);
+	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod,vm.count("preindexed")>0);
 }
 
 
