@@ -6,13 +6,9 @@ possible.
 
 It includes
 
-CExtractContexts: A tool for extracting context representations from a 
-large corpus (complete) 
-CClusterContexts: A tool for clustering large 
-numbers of context representations (incomplete)
-XXXX: A tool for 
-re-labelling words in context with their appropriate representation 
-(incomplete)
+* CExtractContexts: A tool for extracting context representations from a large corpus (complete) 
+* CClusterContexts: A tool for clustering large numbers of context representations (incomplete)
+* XXXX: A tool for re-labelling words in context with their appropriate representation (incomplete)
 
 The goal is to make multi-protype representations more accessible.
 
