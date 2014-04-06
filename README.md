@@ -1,6 +1,6 @@
 # Overview
 CMultiVec is a (currenly incomplete) set of tools for training vector representations 
-of words, with multiple prototypes per word.  It is based on Huang Socher 2012.  It 
+of words, with multiple prototypes per word.  It is based on Huang Socher 2012[1].  It 
 is designed to be as fast as possible.
 
 It includes
@@ -17,7 +17,7 @@ The goal is to make multi-protype representations more accessible.
 
 ### Optional
 
-* MLPack
+* MLPack[2]
 
 ##CExtractContexts
 CExtractContexts will open a file for every word in the vocabulary. For a vocabulary with 100,000 
