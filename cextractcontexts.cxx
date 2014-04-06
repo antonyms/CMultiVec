@@ -256,19 +256,18 @@ int main(int argc, char** argv) {
 		return 4;
 	}
 
-	std::string indir(corpusd);
-	if(!boost::filesystem::is_directory(indir)) {
+
+	if(!boost::filesystem::is_directory(corpusd)) {
 		std::cerr << "Input directory does not exist" <<std::endl;
 		return 5;
 	}
 
-	std::string outdir(outd);
-	if(!boost::filesystem::is_directory(outdir)) {
+	if(!boost::filesystem::is_directory(outd)) {
 		std::cerr << "Input directory does not exist" <<std::endl;
 		return 6;
 	}
 
-	return extract_contexts(vocab, frequencies, vectors, indir,outdir,dim,contextsize,eod,vm.count("preindexed")>0,prune);
+	return extract_contexts(vocab, frequencies, vectors, corpusd,outd,dim,contextsize,eod,vm.count("preindexed")>0,prune);
 }
 
 
