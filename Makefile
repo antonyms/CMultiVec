@@ -11,7 +11,7 @@ INCFLAGS =
 LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack
 LIBS = 
 
-all: CExtractContexts CClusterContexts CRelabelCorpus
+all: CExtractContexts CClusterContexts CExpandVocab CRelabelCorpus
 
 CExtractContexts: $(EOBJECTS)
 	$(CC) -o CExtractContexts $(EOBJECTS) $(LDFLAGS) $(LIBS)
