@@ -2,11 +2,11 @@
 ## Created by Anjuta
 
 CC = g++
-CFLAGS = -O2 -Wall -std=c++11
+CFLAGS = -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
 EOBJECTS = cextractcontexts.o
 COBJECTS = cclustercontexts.o
 INCFLAGS =
-LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams
+LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack
 LIBS = 
 
 all: CExtractContexts CClusterContexts

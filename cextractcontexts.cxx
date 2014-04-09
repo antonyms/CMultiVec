@@ -50,9 +50,11 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	//Look up the idfs of the words in context
 	std::transform(context.begin(),context.end(),idfc,[&idfs](int c) ->float {return idfs[c];});
 
-	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],0);
+	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],(float)0);
+	if(idfsum==0) {
+		return;
+	}
 	float invidfsum=1/idfsum;
-
 	std::vector<float> tot(vecdim);
 
 	for(unsigned int i=0; i<contextsize; i++) {
@@ -66,10 +68,6 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 
 	//now tot will contain the context representation of the middle vector
 	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
-	for(unsigned int i=0; i<vecdim; i++) {
-		std::cout<<tot[i]<< " ";
-	}
-	std::cout <<std::endl;
 }
 
 
@@ -171,7 +169,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 
 			while(getline(corpusreader,word)) {
 				if(word==eodmarker) goto EOD;
-				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,prune);
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
 				context.pop_front();
 				int newind=lookup_word(vocabmap,word,indexed);
 				context.push_back(newind);
@@ -183,7 +181,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 					k++;
 			}
 			for(; k<contextsize; k++) {
-				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,prune);
+				compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
 				context.pop_front();
 				context.push_back(enddoci);
 			}

@@ -31,8 +31,11 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include <armadillo>
+#include <mlpack/methods/kmeans/kmeans.hpp>
+
 
 namespace po=boost::program_options;
+namespace km=mlpack::kmeans;
 
 int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int vecdim) {
 	for (boost::filesystem::directory_iterator itr(contextdir); itr!=boost::filesystem::directory_iterator(); ++itr) {
@@ -43,16 +46,32 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 		if(boost::filesystem::file_size(itr->path())==0) {
 			continue;
 		}
-		boost::iostreams::mapped_file_source file(path);
-		int numpoints=file.size()/vecdim;
-		const arma::fmat clusters((float*)file.data(), vecdim, numpoints, false,true) ;
+		std::cout << path <<std::endl;
+		boost::iostreams::mapped_file_source file(itr->path());
+		int numpoints=file.size()/(vecdim*sizeof(float));
+		std::cout << numpoints << " points" <<std::endl;
+		const arma::fmat data((float*)file.data(), vecdim, numpoints, false,true);
 
-		for(int i=0; i<vecdim; i++) {
-			std::cout<<clusters(1,i) << " ";
+		size_t numclust=std::min(numpoints,10);
+
+		arma::Col<size_t> assignments(numpoints);
+		
+		arma::fmat centroids(vecdim,numclust);
+		km::KMeans<> k;
+
+		k.Cluster(data, numclust, assignments,centroids);
+
+		boost::filesystem::path outpath=clusterdir / itr->path().filename();
+		outpath=outpath.replace_extension(".txt");
+		
+		std::ofstream clusterfile(outpath.string());
+		for(unsigned int i=0; i< numclust; i++) {
+			for(int j=0; j<vecdim; j++) {
+				clusterfile << centroids(j,i) << " ";
+			}
+			clusterfile << std::endl;
 		}
-		std::cout <<std::endl;
-		int numclust=10;
-
+	clusterfile.close();
 	}
 	return 0;
 }
