@@ -54,7 +54,7 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	if(idfsum==0) {
 		return;
 	}
-	float invidfsum=1/idfsum;
+	float invidfsum=1/idfsum; 
 	std::vector<float> tot(vecdim);
 
 	for(unsigned int i=0; i<contextsize; i++) {

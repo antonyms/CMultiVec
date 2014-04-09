@@ -31,7 +31,10 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include <armadillo>
+#include <mlpack/core.hpp>
 #include <mlpack/methods/kmeans/kmeans.hpp>
+
+#include "mlpack/cosinesqrkernel.hpp" 
 
 
 namespace po=boost::program_options;
@@ -57,7 +60,7 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 		arma::Col<size_t> assignments(numpoints);
 		
 		arma::fmat centroids(vecdim,numclust);
-		km::KMeans<> k;
+		km::KMeans<CosineSqrKernel> k;
 
 		k.Cluster(data, numclust, assignments,centroids);
 
