@@ -23,15 +23,41 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <iostream>
-#include <fstream>
+#include <sstream>
+#include <iomanip>
 
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <boost/program_options.hpp>
 
 namespace po=boost::program_options;
-int expand_vocab(std::ifstream& vocabin, const std::string& clusterdir, std::ofstream& vocabout) {
+namespace fs=boost::filesystem;
+int expand_vocab(fs::ifstream& vocabin, const std::string& clusterdir, fs::ofstream& vocabout) {
+	fs::path clusterpath(clusterdir);
+
+	int index=0;
+	std::string line;
+	while(getline(vocabin, line)) {
+		std::stringstream ss;
+		ss << index << ".txt";
+		fs::path cfile=clusterpath / ss.str();
+		
+		int nclusters=0;
+		if(fs::exists(cfile)) {
+			fs::ifstream clusterfile(cfile);
+			std::string clustervec;
+			while(getline(clusterfile,clustervec)) nclusters++;
+		} else {
+			nclusters=1;
+		}
+		for(int i=0; i< nclusters; i++) {
+			vocabout << std::setfill ('0') << std::setw (2) << i <<line <<std::endl;
+		}
+		 index++;
+	}
 	return 0;
 }
+
 int main(int argc, char** argv) {
 	
 	std::string vocabf;
@@ -62,7 +88,7 @@ int main(int argc, char** argv) {
         return 1;
 	}
 	
-	std::ifstream vocab(vocabf);
+	fs::ifstream vocab(vocabf);
 	if(!vocab.good()) {
 		std::cerr << "Vocab file no good" <<std::endl;
 		return 2;
@@ -73,7 +99,7 @@ int main(int argc, char** argv) {
 		return 3;
 	}
 	
-	std::ofstream ovocab(outvocab);
+	fs::ofstream ovocab(outvocab);
 	if(!ovocab.good()) {
 		std::cerr << "Output vocab file no good" <<std::endl;
 		return 4;
