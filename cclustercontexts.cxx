@@ -49,7 +49,7 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 		if(boost::filesystem::file_size(itr->path())==0) {
 			continue;
 		}
-		std::cout << path <<std::endl;
+		std::cout << path << '\n';
 		boost::iostreams::mapped_file_source file(itr->path());
 		int numpoints=file.size()/(vecdim*sizeof(float));
 		std::cout << numpoints << " points" <<std::endl;
@@ -72,7 +72,7 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 			for(int j=0; j<vecdim; j++) {
 				clusterfile << centroids(j,i) << " ";
 			}
-			clusterfile << std::endl;
+			clusterfile << '\n';
 		}
 	clusterfile.close();
 	}
