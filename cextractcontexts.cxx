@@ -36,75 +36,46 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
 
-#define EODWORD "eeeoddd"
+#include "common.hpp"
 
 namespace po=boost::program_options;
 
-void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const std::vector<float>& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize, int prune) {
+void compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat& origvects, std::vector<FILE*>& outfiles,unsigned int vecdim, unsigned int contextsize, int prune) {
 	int midid=context[contextsize]; 
 	if(midid>=prune) {
 		return;
 	}
-	float idfc[2*contextsize+1]; //idf context window
-
-	//Look up the idfs of the words in context
-	std::transform(context.begin(),context.end(),idfc,[&idfs](int c) ->float {return idfs[c];});
-
-	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],(float)0);
-	if(idfsum==0) {
-		return;
-	}
-	float invidfsum=1/idfsum; 
-	std::vector<float> tot(vecdim);
-
-	for(unsigned int i=0; i<contextsize; i++) {
-		float idfterm=idfc[i]*invidfsum;
-		std::transform(tot.begin(), tot.end(),&origvects[context[i]*vecdim], tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
-	}
-	for(unsigned int i=contextsize+1; i<2*contextsize+1; i++) {
-		float idfterm=idfc[i]*invidfsum;
-		std::transform(tot.begin(), tot.end(),&origvects[context[i]*vecdim], tot.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
-	}
+	arma::fvec out(vecdim);
+	compute_context(context, idfs,origvects,out,vecdim,contextsize);
 
 	//now tot will contain the context representation of the middle vector
-	fwrite(&tot[0],sizeof(float),vecdim,outfiles[midid]);
-}
-
-
-int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed) {
-	if(indexed) {
-		return std::stoi(word);
-	} else {
-		boost::unordered_map<std::string,int>::const_iterator index=vocabmap.find(word);
-		if(index==vocabmap.end()) {
-			return 0;  //Unknown words are mapped to 0, so the first word in your vocab better be unknown
-		}
-		return index->second;}
+	fwrite(&out[0],sizeof(float),vecdim,outfiles[midid]);
 }
 
 int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker, bool indexed,unsigned int prune) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
-	std::vector<float> origvects(5*vecdim);
+	arma::fmat origvects(vecdim,5);
 	
 	std::string word;
 	unsigned int index=0;
 	while(getline(vocabstream,word)) {
 		vocab.push_back(word);
-		vocabmap[word]=index++;
+		vocabmap[word]=index;
 
 		float tf;
 		tfidfstream >>tf;
 		idfs.push_back(tf);
 
-		if((index+1)*vecdim>origvects.size()) {
-			origvects.resize(origvects.size()*2,vecdim);
+		if(index>=origvects.n_cols) {
+			origvects.resize(origvects.n_rows,origvects.n_cols*2);
 		}
 		
 		for(int i=0; i<vecdim; i++) {
-			vectorstream>>origvects[index*vecdim+i];
+			vectorstream>>origvects(i,index);
 		}
+		index++;
 	}
 
 	vocabstream.close();

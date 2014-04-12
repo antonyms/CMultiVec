@@ -29,31 +29,40 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/program_options.hpp>
+#include <boost/unordered_map.hpp>
+
+#include <armadillo>
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
-int expand_vocab(fs::ifstream& vocabin, const std::string& clusterdir, fs::ofstream& vocabout) {
+int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& vecstream, fs::ofstream& ovecstream, const std::string& clusterdir) {
+
 	fs::path clusterpath(clusterdir);
 
-	int index=0;
-	std::string line;
-	while(getline(vocabin, line)) {
+	std::string word;
+	unsigned int index=0;
+	while(getline(vocabin,word)) {
+		std::string origvec;
+		getline(vecstream,origvec);
 		std::stringstream ss;
 		ss << index << ".txt";
 		fs::path cfile=clusterpath / ss.str();
+
 		
-		int nclusters=0;
+		int defn=0;
 		if(fs::exists(cfile)) {
 			fs::ifstream clusterfile(cfile);
 			std::string clustervec;
-			while(getline(clusterfile,clustervec)) nclusters++;
+			while(getline(clusterfile,clustervec)) {
+				vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
+				ovecstream << clustervec << '\n';
+			}
 		} else {
-			nclusters=1;
+				std::string origvec;
+				vocabout <<  std::setfill ('0') << std::setw (2) << defn <<word <<'\n';
+				ovecstream << origvec << '\n';
 		}
-		for(int i=0; i< nclusters; i++) {
-			vocabout << std::setfill ('0') << std::setw (2) << i <<line <<std::endl;
-		}
-		 index++;
+		index++;
 	}
 	return 0;
 }
@@ -61,15 +70,19 @@ int expand_vocab(fs::ifstream& vocabin, const std::string& clusterdir, fs::ofstr
 int main(int argc, char** argv) {
 	
 	std::string vocabf;
+	std::string ovocabf;
+	std::string vecf;
+	std::string ovecf;
 	std::string clusterdir;
-	std::string outvocab;
 	
 	po::options_description desc("CExpandVocab Options");
 	desc.add_options()
     ("help,h", "produce help message")
-    ("vocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "vocab file")
+    ("ivocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
+	("ovocab", po::value<std::string>(&ovocabf)->value_name("<filename>")->required(), "output vocab file")
+	("ivec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
+	("ovec", po::value<std::string>(&ovecf)->value_name("<filename>")->required(), "output word vectors")
 	("clusters,c", po::value<std::string>(&clusterdir)->value_name("<directory>")->required(), "clusters directory")
-	("outvocab,o", po::value<std::string>(&outvocab)->value_name("<filename>")->required(), "expanded vocab output file")
 	;
 
 	
@@ -88,21 +101,31 @@ int main(int argc, char** argv) {
         return 1;
 	}
 	
-	fs::ifstream vocab(vocabf);
-	if(!vocab.good()) {
-		std::cerr << "Vocab file no good" <<std::endl;
+	fs::ifstream ivocab(vocabf);
+	if(!ivocab.good()) {
+		std::cerr << "Input vocab file no good" <<std::endl;
 		return 2;
 	}
-
-	if(!boost::filesystem::is_directory(clusterdir)) {
-		std::cerr << "Cluster directory does not exist" <<std::endl;
-		return 3;
-	}
-	
-	fs::ofstream ovocab(outvocab);
+	fs::ofstream ovocab(ovocabf);
 	if(!ovocab.good()) {
 		std::cerr << "Output vocab file no good" <<std::endl;
+		return 3;
+	}
+	fs::ifstream vectors(vecf);
+	if(!vectors.good()) {
+		std::cerr << "Input vectors file no good" <<std::endl;
+		return 3;
+	}
+	fs::ofstream ovectors(ovecf);
+	if(!vectors.good()) {
+		std::cerr << "Output vectors file no good" <<std::endl;
 		return 4;
 	}
-	return expand_vocab(vocab,clusterdir,ovocab);
+	if(!fs::is_directory(clusterdir)) {
+		std::cerr << "Cluster directory does not exist" <<std::endl;
+		return 5;
+	}
+
+
+	return expand_vocab(ivocab,ovocab, vectors, ovectors, clusterdir);
 }

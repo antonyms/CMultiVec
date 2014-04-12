@@ -8,7 +8,7 @@ COBJECTS = cclustercontexts.o
 VOBJECTS = cexpandvocab.o
 ROBJECTS = crelabelcorpus.o
 INCFLAGS =
-LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack
+LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack -larmadillo
 LIBS = 
 
 all: CExtractContexts CClusterContexts CExpandVocab CRelabelCorpus
