@@ -45,11 +45,11 @@ void compute_and_output_context(const boost::circular_buffer<int>& context, cons
 	if(midid>=prune) {
 		return;
 	}
-	arma::fvec out(vecdim);
+	arma::fvec out(vecdim,arma::fill::zeros);
 	compute_context(context, idfs,origvects,out,vecdim,contextsize);
 
 	//now tot will contain the context representation of the middle vector
-	fwrite(&out[0],sizeof(float),vecdim,outfiles[midid]);
+	fwrite(out.memptr(),sizeof(float),vecdim,outfiles[midid]);
 }
 
 int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim,unsigned int contextsize,std::string eodmarker, bool indexed,unsigned int prune) {

@@ -41,7 +41,7 @@ namespace fs=boost::filesystem;
 
 int convert_word(int index, const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects,const arma::fmat& newvects, std::vector<unsigned int>& xref, unsigned int vecdim, unsigned int contextsize) {
 	arma::fvec c;
-	compute_context(context, idfs,origvects.memptr(), c,vecdim,contextsize);
+	compute_context(context, idfs,origvects, c,vecdim,contextsize);
 	unsigned int starti=xref[index];
 	unsigned int endi=xref[index+1];
 
@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
 	unsigned int contextsize;
 	std::string eod;
 	
-	po::options_description desc("CExpandVocab Options");
+	po::options_description desc("CRelabelCorpus Options");
 	desc.add_options()
     ("help,h", "produce help message")
     ("oldvocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
