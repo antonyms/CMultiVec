@@ -65,12 +65,14 @@ Directory containing text files N.txt which contain the clusters generated from 
 
 The expanded vocab file is just the same as the normal vocab file, except the different sense-clusters of a word are different entries.  The cluster number is just prepended as a two digit number to the entry.  CMultivec tools depend on the expanded vocab to be in the same order as the original vocab, and the clusters to be in numerical order.  For example, it might look like
 
+````
 00dog
 01dog
 00cat
 00jello
 01jello
 02jello
+````
 
 ## Centers File
 Text file, each line containing a whitespace separated vector.  Each vector is the center of the corresponding line in the expanded vocabulary file.  For example, if (0,1.2, 5) is on the line corresponding to 04bagel, then (0,1.2,5) is the center of the the 4th cluster of the contexts of "bagel".
