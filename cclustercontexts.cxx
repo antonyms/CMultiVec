@@ -40,7 +40,7 @@
 namespace po=boost::program_options;
 namespace km=mlpack::kmeans;
 
-int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int vecdim) {
+int cluster_contexts(std::string& contextdir,const std::string& clusterdir, size_t numclust, int vecdim) {
 	for (boost::filesystem::directory_iterator itr(contextdir); itr!=boost::filesystem::directory_iterator(); ++itr) {
 		std::string path=itr->path().string();
 		if(!boost::algorithm::ends_with(path,".vectors")) {
@@ -51,11 +51,11 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 		}
 		std::cout << path << '\n';
 		boost::iostreams::mapped_file_source file(itr->path());
-		int numpoints=file.size()/(vecdim*sizeof(float));
+		size_t numpoints=file.size()/(vecdim*sizeof(float));
 		std::cout << numpoints << " points" <<std::endl;
 		const arma::fmat data((float*)file.data(), vecdim, numpoints, false,true);
 
-		size_t numclust=std::min(numpoints,10);
+		numclust=std::min(numpoints,numclust);
 
 		arma::Col<size_t> assignments(numpoints);
 		
@@ -81,6 +81,7 @@ int cluster_contexts(std::string& contextdir,const std::string& clusterdir, int 
 int main(int argc, char** argv) {
 	std::string contextdir;
 	std::string clusterdir;
+	size_t numclust;
 	unsigned int dim;
 	
 	po::options_description desc("CClusterContexts Options");
@@ -88,6 +89,7 @@ int main(int argc, char** argv) {
     ("help,h", "produce help message")
 	("contexts,i", po::value<std::string>(&contextdir)->value_name("<directory>")->required(), "directory of contexts to cluster")
 	("clusters,o", po::value<std::string>(&clusterdir)->value_name("<directory>")->required(), "directory to output clusters")
+	("numclust,n", po::value<size_t>(&numclust)->value_name("<number>")->default_value(10),"number of clusters")
 	("dim,d", po::value<unsigned int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
 		;
 
@@ -113,5 +115,5 @@ int main(int argc, char** argv) {
 		std::cerr << "Cluster directory does not exist" <<std::endl;
 		return 3;
 	}
-	return cluster_contexts(contextdir, clusterdir,dim);
+	return cluster_contexts(contextdir, clusterdir,numclust, dim);
 }
