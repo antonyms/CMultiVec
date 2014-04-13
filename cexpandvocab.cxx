@@ -35,7 +35,7 @@
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
-int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& vecstream, fs::ofstream& ovecstream, const std::string& clusterdir) {
+int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& vecstream, fs::ofstream& ocenterstream, const std::string& clusterdir) {
 
 	fs::path clusterpath(clusterdir);
 
@@ -55,12 +55,12 @@ int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& v
 			std::string clustervec;
 			while(getline(clusterfile,clustervec)) {
 				vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
-				ovecstream << clustervec << '\n';
+				ocenterstream << clustervec << '\n';
 			}
 		} else {
 				std::string origvec;
 				vocabout <<  std::setfill ('0') << std::setw (2) << defn <<word <<'\n';
-				ovecstream << origvec << '\n';
+				ocenterstream << origvec << '\n';
 		}
 		index++;
 	}
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 	std::string vocabf;
 	std::string ovocabf;
 	std::string vecf;
-	std::string ovecf;
+	std::string ocenterf;
 	std::string clusterdir;
 	
 	po::options_description desc("CExpandVocab Options");
@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
     ("help,h", "produce help message")
     ("ivocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
 	("ovocab", po::value<std::string>(&ovocabf)->value_name("<filename>")->required(), "output vocab file")
-	("ivec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
-	("ovec", po::value<std::string>(&ovecf)->value_name("<filename>")->required(), "output word vectors")
+	("vec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
+	("centers", po::value<std::string>(&ocenterf)->value_name("<filename>")->required(), "output cluster centers")
 	("clusters,c", po::value<std::string>(&clusterdir)->value_name("<directory>")->required(), "clusters directory")
 	;
 
@@ -116,9 +116,9 @@ int main(int argc, char** argv) {
 		std::cerr << "Input vectors file no good" <<std::endl;
 		return 3;
 	}
-	fs::ofstream ovectors(ovecf);
-	if(!vectors.good()) {
-		std::cerr << "Output vectors file no good" <<std::endl;
+	fs::ofstream ocenter(ocenterf);
+	if(!ocenter.good()) {
+		std::cerr << "Output context mapping file no good" <<std::endl;
 		return 4;
 	}
 	if(!fs::is_directory(clusterdir)) {
@@ -127,5 +127,5 @@ int main(int argc, char** argv) {
 	}
 
 
-	return expand_vocab(ivocab,ovocab, vectors, ovectors, clusterdir);
+	return expand_vocab(ivocab,ovocab, vectors, ocenter, clusterdir);
 }

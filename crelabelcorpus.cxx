@@ -39,22 +39,23 @@
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
 
-int convert_word(int index, const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects,const arma::fmat& newvects, std::vector<unsigned int>& xref, unsigned int vecdim, unsigned int contextsize) {
-	arma::fvec c;
+int convert_word(int index, const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects,const arma::fmat& centers, std::vector<unsigned int>& xref, unsigned int vecdim, unsigned int contextsize) {
+	arma::fvec c(vecdim,arma::fill::zeros);
 	compute_context(context, idfs,origvects, c,vecdim,contextsize);
 	unsigned int starti=xref[index];
 	unsigned int endi=xref[index+1];
 
 	int nclust=endi-starti;
 	std::vector<float> sim(endi-starti);
-	int max=0;
+
 	for(int i=0; i<nclust; i++) {
-		sim[i]=CosineSqrKernel().Evaluate(newvects.unsafe_col(starti+i),c);
+		sim[i]=CosineSqrKernel().Evaluate(centers.unsafe_col(starti+i),c);
 	}
-	return starti+max;
+	
+	return distance(sim.begin(),max_element(sim.begin(), sim.end()));
 }
 
-int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& newvecstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed) {
+int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed) {
 
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
@@ -62,7 +63,7 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 	arma::fmat origvects(vecdim, 5);
 
 	std::vector<unsigned int> crossreference;
-	arma::fmat newvects(vecdim,5);
+	arma::fmat centers(vecdim,5);
 	
 	unsigned int index=0;
 	unsigned int xrefindex=0;
@@ -86,11 +87,11 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 		
 		crossreference.push_back(xrefindex);
 		do {
-			if(xrefindex>=newvects.n_cols) {
-				newvects.resize(vecdim,newvects.n_cols*2);
+			if(xrefindex>=centers.n_cols) {
+				centers.resize(vecdim,centers.n_cols*2);
 			}
 			for(unsigned int i=0; i<vecdim; i++) {
-				newvecstream >>newvects(i,xrefindex);
+				centerstream >>centers(i,xrefindex);
 			}
 			getline(newvocabstream,newword);
 			xrefindex++;
@@ -135,11 +136,13 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 
 			while(getline(corpusreader,word)) {
 				if(word==eodmarker) goto EOD;
-				
-				int newword=convert_word(context[contextsize], context,  idfs, origvects, newvects, crossreference, vecdim, contextsize);
+
+				int wid=context[contextsize];
+				int meaning=convert_word(wid, context,  idfs, origvects, centers, crossreference, vecdim, contextsize);
+				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
 				context.pop_front();
-				int newind=lookup_word(vocabmap,word,indexed);
-				context.push_back(newind);
+				int nextind=lookup_word(vocabmap,word,indexed);
+				context.push_back(nextind);
 			}
 			EOD:
 			unsigned int k=0;
@@ -148,9 +151,9 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 					k++;
 			}
 			for(; k<contextsize; k++) {
-				
-				std::vector<float> outvec(vecdim);
-				int newword=convert_word(context[contextsize], context,  idfs, origvects, newvects, crossreference, vecdim, contextsize);
+				int wid=context[contextsize];
+				int meaning=convert_word(wid, context,  idfs, origvects, centers, crossreference, vecdim, contextsize);
+				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
 				context.pop_front();
 				context.push_back(enddoci);
 			}
@@ -164,7 +167,7 @@ int main(int argc, char** argv) {
 	std::string expandedvocabf;
 	std::string idff;
 	std::string vecf;
-	std::string newvecf;
+	std::string centersf;
 	std::string icorpusf;
 	std::string ocorpusf;
 
@@ -179,12 +182,12 @@ int main(int argc, char** argv) {
 	("newvocab,e", po::value<std::string>(&expandedvocabf)->value_name("<filename>")->required(), "new vocabulary file")
 	("idf,f", po::value<std::string>(&idff)->value_name("<filename>")->required(), "original idf file")
 	("oldvec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
-	("newvec,n", po::value<std::string>(&newvecf)->value_name("<filename>")->required(), "new word vectors")
+	("centers,c", po::value<std::string>(&centersf)->value_name("<filename>")->required(), "cluster centers file")
 	("icorpus,i", po::value<std::string>(&icorpusf)->value_name("<directory>")->required(), "input corpus")
 	("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
 	("dim,d", po::value<unsigned int>(&vecdim)->value_name("<number>")->default_value(50), "dimension of word vectors")
 	("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
-	("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
+	("eodmarker",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
 	("preindexed","indicates the corpus is pre-indexed with the vocab file")
 	;
 
@@ -226,9 +229,9 @@ int main(int argc, char** argv) {
 		std::cerr << "Original vectors file no good" <<std::endl;
 		return 5;
 	}
-	fs::ifstream newvectors(newvecf);
+	fs::ifstream centers(centersf);
 	if(!vectors.good()) {
-		std::cerr << "New vectors file no good" <<std::endl;
+		std::cerr << "Cluster centers file no good" <<std::endl;
 		return 6;
 	}
 	fs::path icorpus(icorpusf);
@@ -241,5 +244,5 @@ int main(int argc, char** argv) {
 		std::cerr << "Output corpus directory does not exist" <<std::endl;
 		return 8;
 	}
-	return relabel_corpus(oldvocab,newvocab,idf,vectors,newvectors,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0);
+	return relabel_corpus(oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0);
 }
