@@ -6,18 +6,16 @@ possible.
 
 It includes
 
-* CExtractContexts: A tool for extracting context representations from a large corpus (complete) 
-* CClusterContexts: A tool for clustering large numbers of context representations (incomplete)
-* XXXX: A tool for re-labelling words in context with their appropriate representation (incomplete)
+* CExtractContexts: A tool for extracting context representations from a large corpus 
+* CClusterContexts: A tool for clustering large numbers of context representations
+* CExpandVocab: A tool for generating vocabulary files and the data needed to relabel a corpus
+* CRelabelCorpus: A tool for relabeling a corpus based on the context of the words.
 
 The goal is to make multi-protype representations more accessible.
 
 ### Requirements
 * C++11
 * Boost (filesystem, program options, iostreams)
-
-### Optional
-
 * MLPack[2]
 
 ##CExtractContexts
@@ -29,6 +27,10 @@ open more files simultaneously. Adding a line like
     bob     hard    nofile     200000
 
 and logging back in should do the trick.
+
+
+##CClusterContexts
+CClusterContexts currently only implements a single method of clustering, spherical K-Means, using the MLPack library, but in the future it will provide multiple options.
 
 # Data formats
 
@@ -51,11 +53,27 @@ Directory containing an arbitrary number of .txt files.  All of them
 will be processed.
 
 ## Context Directory
-Binary files named N.bin which contain the contexts of the Nth word in 
+Binary files named N.vectors which contain the contexts of the Nth word in 
 the vocabulary. Contains a list of tfidf-weighted context vectors.  Each 
 vector is D IEEE-754 floats. The vectors are just concatenated and there 
 is no padding.
 
+## Clusters Directory
+Directory containing text files N.txt which contain the clusters generated from the contexts of the Nth word in the vocabulary.  Each line is a whitespace separated vector, representing the center of one of the clusters.
+
+## Expanded Vocab file
+
+The expanded vocab file is just the same as the normal vocab file, except the different sense-clusters of a word are different entries.  The cluster number is just prepended as a two digit number to the entry.  CMultivec tools depend on the expanded vocab to be in the same order as the original vocab, and the clusters to be in numerical order.  For example, it might look like
+
+00dog
+01dog
+00cat
+00jello
+01jello
+02jello
+
+## Centers File
+Text file, each line containing a whitespace separated vector.  Each vector is the center of the corresponding line in the expanded vocabulary file.  For example, if (0,1.2, 5) is on the line corresponding to 04bagel, then (0,1.2,5) is the center of the the 4th cluster of the contexts of "bagel".
 
 # Citations
 ````

@@ -35,19 +35,16 @@
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
-int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& vecstream, fs::ofstream& ocenterstream, const std::string& clusterdir) {
+int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout, fs::ofstream& ocenterstream, const std::string& clusterdir, int dim) {
 
 	fs::path clusterpath(clusterdir);
 
 	std::string word;
 	unsigned int index=0;
 	while(getline(vocabin,word)) {
-		std::string origvec;
-		getline(vecstream,origvec);
 		std::stringstream ss;
 		ss << index << ".txt";
 		fs::path cfile=clusterpath / ss.str();
-
 		
 		int defn=0;
 		if(fs::exists(cfile)) {
@@ -58,9 +55,11 @@ int expand_vocab(fs::ifstream& vocabin, fs::ofstream& vocabout,  fs::ifstream& v
 				ocenterstream << clustervec << '\n';
 			}
 		} else {
-				std::string origvec;
-				vocabout <<  std::setfill ('0') << std::setw (2) << defn <<word <<'\n';
-				ocenterstream << origvec << '\n';
+				vocabout <<  std::setfill ('0') << std::setw (2) << 0 <<word <<'\n';
+				for(int i=0; i<dim; i++) { //Fill with zeros if there are no clusters
+					ocenterstream << "0 ";
+				}
+				ocenterstream << '\n';
 		}
 		index++;
 	}
@@ -74,15 +73,16 @@ int main(int argc, char** argv) {
 	std::string vecf;
 	std::string ocenterf;
 	std::string clusterdir;
+	unsigned int dim;
 	
 	po::options_description desc("CExpandVocab Options");
 	desc.add_options()
     ("help,h", "produce help message")
     ("ivocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
 	("ovocab", po::value<std::string>(&ovocabf)->value_name("<filename>")->required(), "output vocab file")
-	("vec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
 	("centers", po::value<std::string>(&ocenterf)->value_name("<filename>")->required(), "output cluster centers")
 	("clusters,c", po::value<std::string>(&clusterdir)->value_name("<directory>")->required(), "clusters directory")
+	("dim,d", po::value<unsigned int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
 	;
 
 	
@@ -111,11 +111,6 @@ int main(int argc, char** argv) {
 		std::cerr << "Output vocab file no good" <<std::endl;
 		return 3;
 	}
-	fs::ifstream vectors(vecf);
-	if(!vectors.good()) {
-		std::cerr << "Input vectors file no good" <<std::endl;
-		return 3;
-	}
 	fs::ofstream ocenter(ocenterf);
 	if(!ocenter.good()) {
 		std::cerr << "Output context mapping file no good" <<std::endl;
@@ -127,5 +122,5 @@ int main(int argc, char** argv) {
 	}
 
 
-	return expand_vocab(ivocab,ovocab, vectors, ocenter, clusterdir);
+	return expand_vocab(ivocab,ovocab, ocenter, clusterdir, dim);
 }
