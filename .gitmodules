@@ -1,0 +1,3 @@
+[submodule "halite"]
+	path = halite
+	url = git@github.com:jeremysalwen/HaliteClustering.git
