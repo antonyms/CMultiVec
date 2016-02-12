@@ -31,10 +31,11 @@
 #include <boost/filesystem/fstream.hpp>
 #include <boost/program_options.hpp>
 
+#include "mlpack/cosinesqrkernel.hpp"
 #include <armadillo>
 
 #include "common.hpp"
-#include "mlpack/cosinesqrkernel.hpp"
+
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
