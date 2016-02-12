@@ -1,8 +1,12 @@
 
-## Created by Anjuta
+ENABLE_HALITE ?= 1
+ifeq ($(ENABLE_HALITE), 1)
+    CFLAGS = -DENABLE_HALITE `pkg-config --cflags opencv`
+endif
+
 
 CC = g++
-CFLAGS = -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
+CFLAGS += -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
 EOBJECTS = cextractcontexts.o
 COBJECTS = cclustercontexts.o
 VOBJECTS = cexpandvocab.o
