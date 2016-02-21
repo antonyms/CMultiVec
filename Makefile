@@ -1,18 +1,18 @@
-
 ENABLE_HALITE ?= 1
 ifeq ($(ENABLE_HALITE), 1)
-    CFLAGS = -DENABLE_HALITE `pkg-config --cflags opencv`
+    CFLAGS = -DENABLE_HALITE -Ihalite/include `pkg-config --cflags opencv`
+    LDFLAGS = halite/libhalite.a `pkg-config --libs opencv` -ldb_cxx
 endif
 
 
 CC = g++
 CFLAGS += -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
 EOBJECTS = cextractcontexts.o
-COBJECTS = cclustercontexts.o
+COBJECTS += cclustercontexts.o
 VOBJECTS = cexpandvocab.o
 ROBJECTS = crelabelcorpus.o
 INCFLAGS =
-LDFLAGS = -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack -larmadillo
+LDFLAGS += -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack -larmadillo
 LIBS = 
 
 all: CExtractContexts CClusterContexts CExpandVocab CRelabelCorpus

@@ -59,7 +59,25 @@ vector is D IEEE-754 floats. The vectors are just concatenated and there
 is no padding.
 
 ## Clusters Directory
-Directory containing text files N.txt which contain the clusters generated from the contexts of the Nth word in the vocabulary.  Each line is a whitespace separated vector, representing the center of one of the clusters.
+Directory containing text files N.*.txt which contain the clusters 
+generated from the contexts of the Nth word in the vocabulary.  
+
+Depending on the clustering mode, they will be in different formats.
+
+If using the kmeans clustering mode: N.centers.txt will have on each 
+line a whitespace separated vector, representing the center of one of 
+the clusters.
+
+If using the halite clustering mode: N.hlclusters.txt will be a sequence 
+of "Beta Clusters". Each Beta Cluster will list (whitespace and newline 
+separated)
+
+  Correlation Cluster number\n
+  Vector of relevance\n
+  Vector of lower bounds\n
+  Vector of upper bounds\n
+
+Where each correlation cluster may be composed of multiple beta clusters.
 
 ## Expanded Vocab file
 
