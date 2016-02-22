@@ -19,7 +19,11 @@ The goal is to make multi-protype representations more accessible.
 * MLPack[2]
 
 #Tools
-There are four tools, which work as a pipeline.
+There are four tools, which work as a pipeline.  For a full listing of 
+the command line options, just run any of the tools with the -h option.
+
+The data formats section below will also help you understand the inputs 
+and outputs of these tools
 
 ##CExtractContexts
 CExtractContexts creates a Context Directory from a corpus.  By default 
