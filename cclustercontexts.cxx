@@ -157,16 +157,7 @@ int main(int argc, char** argv) {
     std::cout << desc << "\n";
     return 0;
   }
-  if(vm.count("kmeans") && vm.count("halite")) {
-    std::cerr << "Error: Only one clustering algorithm can be selected\n";
-    return 0;
-  }
 
-  ClusterAlgos algorithm=SphericalKMeans;
-  if(vm.count("halite")) {
-    algorithm=HaliteAlgo;
-  }
-       
   try {
     po::notify(vm);
   } catch(po::required_option& exception) {
@@ -174,13 +165,24 @@ int main(int argc, char** argv) {
     std::cout << desc << "\n";
     return 1;
   }
+  if(vm.count("kmeans") && vm.count("halite")) {
+    std::cerr << "Error: Only one clustering algorithm can be selected\n";
+    return 2;
+  }
+
+  ClusterAlgos algorithm=SphericalKMeans;
+  if(vm.count("halite")) {
+    algorithm=HaliteAlgo;
+  }
+       
+
   if(!boost::filesystem::is_directory(contextdir)) {
     std::cerr << "Context directory does not exist" <<std::endl;
-    return 2;
+    return 3;
   }
   if(!boost::filesystem::is_directory(clusterdir)) {
     std::cerr << "Cluster directory does not exist" <<std::endl;
-    return 3;
+    return 4;
   }
   return cluster_contexts(algorithm, contextdir, clusterdir, numclust, dim);
 }
