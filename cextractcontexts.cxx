@@ -46,7 +46,7 @@ struct FileCacheEntry;
 struct FileCacheEntry {
   std::list<FileCacheEntry*>::iterator iterator;
   FILE* file=NULL;
-  bool initialized=0;
+  bool initialized=false;
 };
 
 class CachingFileArray {
@@ -80,14 +80,15 @@ protected:
   FILE* openFile(size_t id) {
     FileCacheEntry& e=entries[id];
     std::string fname=file_namer(id);
-    
-    e.file = fopen(fname.c_str(), e.initialized?"wa":"w");
+
+    e.file = fopen(fname.c_str(), e.initialized?"ab":"wb");
     
     if(e.file==NULL) {
       return NULL;
     }
     queue.push_front(&e);
     e.iterator=queue.begin();
+
     e.initialized=true;
     
     return e.file;
