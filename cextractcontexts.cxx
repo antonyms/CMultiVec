@@ -41,21 +41,25 @@
 
 namespace po=boost::program_options;
 
+struct FileCacheEntry;
+
 struct FileCacheEntry {
-  std::list<size_t>::iterator iterator;
+  std::list<FileCacheEntry*>::iterator iterator;
   FILE* file=NULL;
   bool initialized=0;
 };
 
 class CachingFileArray {
 public:
-  CachingFileArray(std::function<std::string (size_t)> f_namer, size_t numFiles, size_t cachesize): cachesize(cachesize), file_namer(f_namer), entries(cachesize)  {
+  CachingFileArray(std::function<std::string (size_t)> f_namer, size_t numFiles, size_t cachesize): cachesize(cachesize), file_namer(f_namer), entries(numFiles)  {
+
   }
 
   FILE* getFile(size_t id) {
+   
     FileCacheEntry& e=entries[id];
     if(e.file!=NULL) { //cache hit
-       //Move the current file to the front of the queue
+      //Move the current file to the front of the queue
       if(e.iterator!=queue.begin()) {
 	queue.splice(queue.begin(), queue, e.iterator);
       }
@@ -82,7 +86,7 @@ protected:
     if(e.file==NULL) {
       return NULL;
     }
-    queue.push_front(id);
+    queue.push_front(&e);
     e.iterator=queue.begin();
     e.initialized=true;
     
@@ -91,12 +95,11 @@ protected:
   
   bool closeOldestFile() {
     if(!queue.empty()) {
-      size_t index=queue.back();
+      FileCacheEntry* e = queue.back();
       queue.pop_back();
 
-      FileCacheEntry& e=entries[index];
-      fclose(e.file);
-      e.file=NULL;
+      fclose(e->file);
+      e->file=NULL;
       return true;
     } else {
       return false;
@@ -106,7 +109,7 @@ protected:
 
   size_t cachesize;
   std::function<std::string (size_t)> file_namer;
-  std::list<size_t> queue;
+  std::list<FileCacheEntry*> queue;
   std::vector<FileCacheEntry> entries;
 };
 

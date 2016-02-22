@@ -6,7 +6,7 @@ endif
 
 
 CC = g++
-CFLAGS += -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
+CFLAGS += -g -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
 EOBJECTS = cextractcontexts.o
 COBJECTS += cclustercontexts.o
 VOBJECTS = cexpandvocab.o
