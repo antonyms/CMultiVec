@@ -39,16 +39,15 @@
 #ifdef ENABLE_HALITE
 #include "halite/include/HaliteClustering.h"
 #include "halite/include/PointSource.h"
+
+namespace hl=Halite;
 #endif
+
+#include "common.hpp"
 
 namespace po=boost::program_options;
 namespace km=mlpack::kmeans;
-namespace hl=Halite;
 
-enum ClusterAlgos {
-  SphericalKMeans,
-  HaliteAlgo
-};
 
 int cluster_contexts(ClusterAlgos algorithm, std::string& contextdir,const std::string& clusterdir, size_t numclust, int vecdim) {
   for (boost::filesystem::directory_iterator itr(contextdir); itr!=boost::filesystem::directory_iterator(); ++itr) {
@@ -96,26 +95,23 @@ int cluster_contexts(ClusterAlgos algorithm, std::string& contextdir,const std::
     hl::HaliteClustering<float> h(pts, hl::NormalizationMode::Independent, (2*vecdim), -1, 1e-10, 4, 1, 1, DB_HASH, 0);
     h.findCorrelationClusters();
     shared_ptr<hl::Classifier<float> > classifier=h.getClassifier();
-    std::shared_ptr<hl::Normalization<float>> normalization=classifier->normalization;
-    std::vector<float> denormMin(vecdim), denormMax(vecdim);
+    classifier->denormalize();
     
     boost::filesystem::path outpath=clusterdir / itr->path().filename();
     outpath=outpath.replace_extension(".halite.txt");
     std::ofstream clusterfile(outpath.string());
     for(const hl::BetaCluster<float>& b: classifier->betaClusters) {
-      normalization->denormalize(b.min.begin(), denormMin.begin());
-      normalization->denormalize(b.max.begin(), denormMax.begin());
-
+      
       clusterfile << b.correlationCluster<<"\n";
       for(unsigned char c: b.relevantDimension) {
 	clusterfile << (c?"1 ":"0 ");
       }
       clusterfile<<"\n";
-      for(float f:denormMin) {
+      for(float f:b.min) {
 	clusterfile << f << " ";
       }
       clusterfile <<"\n";
-      for(float f:denormMax) {
+      for(float f:b.max) {
 	clusterfile << f << " ";
       }
       clusterfile<<"\n";

@@ -32,14 +32,12 @@
 #include <boost/unordered_map.hpp>
 
 #include <armadillo>
+#include "common.hpp"
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
 
-enum ClusterAlgos {
-  SphericalKMeans,
-  HaliteAlgo
-};
+
 int expand_vocab(ClusterAlgos format, fs::ifstream& vocabin, fs::ofstream& vocabout, fs::ofstream& ocenterstream, const std::string& clusterdir, int dim) {
 
   fs::path clusterpath(clusterdir);
@@ -68,38 +66,41 @@ int expand_vocab(ClusterAlgos format, fs::ifstream& vocabin, fs::ofstream& vocab
 	ocenterstream << '\n';
       }
     } else if(format==HaliteAlgo) {
-      ss << index << ".hlclusters.txt";
+#ifndef ENABLE_HALITE
+      std::cerr<<"Error: Attempted to use Halite clustering when it was disabled at compile time\n";
+      exit(1);
+#else
+      ss << index << ".halite.txt";
       fs::path cfile=clusterpath / ss.str();
 		
       int defn=0;
+      vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
       if(fs::exists(cfile)) {
 	fs::ifstream clusterfile(cfile);
 	std::string line;
 	while(getline(clusterfile,line)) {
 	  vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
 
-	  //Output the word number and cluster number
+	  //Output the word number
 	  ocenterstream << index << '\n';
+	  
 	  //Output the cluster number
 	  ocenterstream << line << '\n';
+	  
 	  //Output the relevance vector
 	  getline(clusterfile,line);
 	  ocenterstream << line << '\n';
+	  
 	  //Output the min vector
 	  getline(clusterfile,line);
 	  ocenterstream << line << '\n';
+	  
 	  //Output the max vector
 	  getline(clusterfile,line);
 	  ocenterstream << line << '\n';
 	}
-      } else {
-	vocabout <<  std::setfill ('0') << std::setw (2) << 0 <<word <<'\n';
-	for(int i=0; i<dim; i++) { //Fill with zeros if there are no clusters
-	  ocenterstream << "0 ";
-	}
-	ocenterstream << '\n';
       }
- 
+#endif
     }
     index++;
   }
@@ -152,6 +153,7 @@ int main(int argc, char** argv) {
   if(vm.count("halite")) {
    format=HaliteAlgo;
   }
+  
   fs::ifstream ivocab(vocabf);
   if(!ivocab.good()) {
     std::cerr << "Input vocab file no good" <<std::endl;

@@ -69,7 +69,8 @@ relabel a corpus with the new expanded vocabulary file.
 ## Vocabulary File
 Text file, one word per line.  CMultiVec has hardcoded in that <s> and 
 </s> are inserted before and after every document, so make sure that 
-they are included in your vocab file.
+they are included in your vocab file.  The first word also must be the
+"unknown" symbol.
 
 ## idf File
 Text file, one floating point value per line.  This will be the inverse 

@@ -30,6 +30,11 @@
 
 #include <armadillo>
 
+enum ClusterAlgos {
+  SphericalKMeans,
+  HaliteAlgo
+};
+
 int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed) {
 	if(indexed) {
 		return std::stoi(word)-1;

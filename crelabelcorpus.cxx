@@ -36,41 +36,145 @@
 
 #include "common.hpp"
 
+#ifdef ENABLE_HALITE
+#include "Classifier.h"
+
+namespace hl=Halite;
+#endif
 
 namespace po=boost::program_options;
 namespace fs=boost::filesystem;
 
-int convert_word(int index, const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects,const arma::fmat& centers, std::vector<unsigned int>& xref, unsigned int vecdim, unsigned int contextsize) {
-	arma::fvec c(vecdim,arma::fill::zeros);
-	compute_context(context, idfs,origvects, c,vecdim,contextsize);
-	unsigned int starti=xref[index];
-	unsigned int endi=xref[index+1];
 
-	int nclust=endi-starti;
-	std::vector<float> sim(endi-starti);
 
-	for(int i=0; i<nclust; i++) {
-		sim[i]=CosineSqrKernel().Evaluate(centers.unsafe_col(starti+i),c);
-	}
+class SphericalKMeansClassifier {
+public:
+  SphericalKMeansClassifier(size_t vecdim): numcenters(0), centers(vecdim,5) {
+  }
+
+  void addCenters(std::string& word, std::string newword, std::ifstream& newvocabstream, std::ifstream& centerstream) {
+
+    crossreference.push_back(numcenters);
+    do {
+      if(numcenters>=centers.n_cols) {
+	centers.resize(centers.n_rows,centers.n_cols*2);
+      }
+      for(unsigned int i=0; i<centers.n_rows; i++) {
+	centerstream >>centers(i,numcenters);
+      }
+      getline(newvocabstream, newword);
+      numcenters++;
+    } while(boost::algorithm::ends_with(newword,word));
+    
+  }
+  
+  int convertWord(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects, unsigned int contextsize) {
+    int index=context[contextsize];
+    arma::fvec c(centers.n_rows, arma::fill::zeros);
+    compute_context(context, idfs, origvects, c, centers.n_rows, contextsize);
+    unsigned int starti=crossreference[index];
+    unsigned int endi=crossreference[index+1];
+
+    int nclust=endi-starti;
+    std::vector<float> sim(nclust);
+
+    for(int i=0; i<nclust; i++) {
+      sim[i]=CosineSqrKernel().Evaluate(centers.unsafe_col(starti+i),c);
+    }
 	
-	return distance(sim.begin(),max_element(sim.begin(), sim.end()));
-}
+    return distance(sim.begin(), max_element(sim.begin(), sim.end()));
+  }
 
-int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed) {
+
+  std::vector<unsigned int> crossreference;
+  size_t numcenters;
+  arma::fmat centers;
+};
+#ifdef ENABLE_HALITE
+class HaliteClassifier {
+public:
+  HaliteClassifier(size_t vecdim): vecdim(vecdim) {
+  }
+  void addClusters(size_t index, size_t& nextclusteridx, std::ifstream& haliteclustersfile) {
+    classifiers.emplace_back();
+    hl::Classifier<float>& cl=classifiers.back();
+    cl.hardClustering=1;
+    
+    while(nextclusteridx == index) {
+      cl.betaClusters.emplace_back(0, vecdim);
+      hl::BetaCluster<float>& newcluster=cl.betaClusters.back();
+
+      //Get correlation cluster;
+      haliteclustersfile >> newcluster.correlationCluster;
+
+      //Get relevance vectors
+      for(size_t i=0; i<vecdim; i++) {
+	haliteclustersfile >> newcluster.relevantDimension[i];
+      }
+
+      //Get relevance vectors
+      for(size_t i=0; i<vecdim; i++) {
+	haliteclustersfile >> newcluster.min[i];
+      }
+
+      //Get relevance vectors
+      for(size_t i=0; i<vecdim; i++) {
+	haliteclustersfile >> newcluster.max[i];
+      }
+
+      haliteclustersfile>>nextclusteridx;
+    }
+  }
+  int convertWord(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat& origvects,  unsigned int contextsize) {
+    int index=context[contextsize];
+  
+    arma::fvec c(vecdim, arma::fill::zeros);
+    compute_context(context, idfs, origvects, c, vecdim, contextsize);
+
+    hl::Classifier<float>& classifier = classifiers[index];
+    size_t cluster = 0;
+    classifier.assignToClusters(c.memptr(), &cluster);
+    return cluster;
+  }
+  
+  size_t vecdim;
+  std::vector<hl::Classifier<float>> classifiers;
+};
+#endif
+
+
+
+int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed) {
 
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
 	arma::fmat origvects(vecdim, 5);
 
-	std::vector<unsigned int> crossreference;
-	arma::fmat centers(vecdim,5);
+	std::unique_ptr<SphericalKMeansClassifier> kmeans;
 	
+#ifdef ENABLE_HALITE
+	std::unique_ptr<HaliteClassifier> halite;
+#else
+	std::cerr<<"Error: Attempted to use Halite clustering format when it was disabled at compile time\n";
+	exit(1);	  
+#endif
+	
+	if(format == SphericalKMeans) {
+	  kmeans = std::unique_ptr<SphericalKMeansClassifier>(new SphericalKMeansClassifier(vecdim));
+	} else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+	  halite = std::unique_ptr<HaliteClassifier>(new HaliteClassifier(vecdim));
+#endif
+	  
+	}
+
 	unsigned int index=0;
-	unsigned int xrefindex=0;
 	std::string word;
 	std::string newword;
 	getline(newvocabstream,newword);
+	size_t nextclusteridx;
+	centerstream >> nextclusteridx;
 	while(getline(vocabstream,word)) {
 		vocab.push_back(word);
 		vocabmap[word]=index;
@@ -85,18 +189,13 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 		for(unsigned int i=0; i<vecdim; i++) {
 			vecstream >> origvects(i,index);
 		}
-		
-		crossreference.push_back(xrefindex);
-		do {
-			if(xrefindex>=centers.n_cols) {
-				centers.resize(vecdim,centers.n_cols*2);
-			}
-			for(unsigned int i=0; i<vecdim; i++) {
-				centerstream >>centers(i,xrefindex);
-			}
-			getline(newvocabstream,newword);
-			xrefindex++;
-		} while(boost::algorithm::ends_with(newword,word));
+		if(format == SphericalKMeans) {
+		  kmeans->addCenters(word, newword, newvocabstream, centerstream);
+		} else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+		  halite->addClusters(index, nextclusteridx, centerstream);
+#endif
+		}
 		index++;
 	}
 
@@ -139,7 +238,16 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 				if(word==eodmarker) goto EOD;
 
 				int wid=context[contextsize];
-				int meaning=convert_word(wid, context,  idfs, origvects, centers, crossreference, vecdim, contextsize);
+				int meaning=0;
+
+				if(format == SphericalKMeans) {
+				  meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
+				} else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+				  meaning = halite->convertWord(context, idfs, origvects, contextsize);
+#endif
+				}
+				
 				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
 				context.pop_front();
 				int nextind=lookup_word(vocabmap,word,indexed);
@@ -153,7 +261,16 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 			}
 			for(; k<contextsize; k++) {
 				int wid=context[contextsize];
-				int meaning=convert_word(wid, context,  idfs, origvects, centers, crossreference, vecdim, contextsize);
+				int meaning=0;
+
+				if(format == SphericalKMeans) {
+				  meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
+				} else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+				  meaning = halite->convertWord(context, idfs, origvects, contextsize);
+#endif
+				}
+
 				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
 				context.pop_front();
 				context.push_back(enddoci);
@@ -164,86 +281,100 @@ int relabel_corpus(fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::if
 }
 
 int main(int argc, char** argv) {
-	std::string vocabf;
-	std::string expandedvocabf;
-	std::string idff;
-	std::string vecf;
-	std::string centersf;
-	std::string icorpusf;
-	std::string ocorpusf;
+  std::string vocabf;
+  std::string expandedvocabf;
+  std::string idff;
+  std::string vecf;
+  std::string centersf;
+  std::string icorpusf;
+  std::string ocorpusf;
 
-	unsigned int vecdim;
-	unsigned int contextsize;
-	std::string eod;
+  unsigned int vecdim;
+  unsigned int contextsize;
+  std::string eod;
 	
-	po::options_description desc("CRelabelCorpus Options");
-	desc.add_options()
+  po::options_description desc("CRelabelCorpus Options");
+  desc.add_options()
     ("help,h", "produce help message")
+    ("kmeans,k", "use spherical k-means clustering (default)")
+    ("halite,l", " use Halite clustering")
     ("oldvocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
-	("newvocab,e", po::value<std::string>(&expandedvocabf)->value_name("<filename>")->required(), "new vocabulary file")
-	("idf,f", po::value<std::string>(&idff)->value_name("<filename>")->required(), "original idf file")
-	("oldvec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
-	("centers,c", po::value<std::string>(&centersf)->value_name("<filename>")->required(), "cluster centers file")
-	("icorpus,i", po::value<std::string>(&icorpusf)->value_name("<directory>")->required(), "input corpus")
-	("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
-	("dim,d", po::value<unsigned int>(&vecdim)->value_name("<number>")->default_value(50), "dimension of word vectors")
-	("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
-	("eodmarker",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
-	("preindexed","indicates the corpus is pre-indexed with the vocab file")
-	;
+    ("newvocab,e", po::value<std::string>(&expandedvocabf)->value_name("<filename>")->required(), "new vocabulary file")
+    ("idf,f", po::value<std::string>(&idff)->value_name("<filename>")->required(), "original idf file")
+    ("oldvec,w", po::value<std::string>(&vecf)->value_name("<filename>")->required(), "original word vectors")
+    ("centers,c", po::value<std::string>(&centersf)->value_name("<filename>")->required(), "cluster centers file")
+    ("icorpus,i", po::value<std::string>(&icorpusf)->value_name("<directory>")->required(), "input corpus")
+    ("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
+    ("dim,d", po::value<unsigned int>(&vecdim)->value_name("<number>")->default_value(50), "dimension of word vectors")
+    ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
+    ("eodmarker",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
+    ("preindexed","indicates the corpus is pre-indexed with the vocab file")
+    
+    ;
 
 	
-	po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc, argv, desc), vm);
 
-	if (vm.count("help")) {
-            std::cout << desc << "\n";
-            return 0;
-   }
-	try {
-		po::notify(vm);
-	} catch(po::required_option& exception) {
-		std::cerr << "Error: " << exception.what() << "\n";
-		std::cout << desc << "\n";
-        return 1;
-	}
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    return 0;
+  }
+  
+  if(vm.count("kmeans") && vm.count("halite")) {
+    std::cerr << "Error: Only one cluster format (kmeans, halite) can be selected\n";
+    return 2;
+  }
+
+  ClusterAlgos format=SphericalKMeans;
+  if(vm.count("halite")) {
+   format=HaliteAlgo;
+  }
+ 
+  try {
+    po::notify(vm);
+  } catch(po::required_option& exception) {
+    std::cerr << "Error: " << exception.what() << "\n";
+    std::cout << desc << "\n";
+    return 1;
+  }
 	
-	fs::ifstream oldvocab(vocabf);
-	if(!oldvocab.good()) {
-		std::cerr << "Original vocab file no good" <<std::endl;
-		return 2;
-	}
+  fs::ifstream oldvocab(vocabf);
+  if(!oldvocab.good()) {
+    std::cerr << "Original vocab file no good" <<std::endl;
+    return 2;
+  }
 	
-	fs::ifstream newvocab(expandedvocabf);
-	if(!newvocab.good()) {
-		std::cerr << "New vocab file no good" <<std::endl;
-		return 3;
-	}
+  fs::ifstream newvocab(expandedvocabf);
+  if(!newvocab.good()) {
+    std::cerr << "New vocab file no good" <<std::endl;
+    return 3;
+  }
 		
-	fs::ifstream idf(idff);
-	if(!newvocab.good()) {
-		std::cerr << "Original idf file no good" <<std::endl;
-		return 4;
-	}
-	fs::ifstream vectors(vecf);
-	if(!vectors.good()) {
-		std::cerr << "Original vectors file no good" <<std::endl;
-		return 5;
-	}
-	fs::ifstream centers(centersf);
-	if(!vectors.good()) {
-		std::cerr << "Cluster centers file no good" <<std::endl;
-		return 6;
-	}
-	fs::path icorpus(icorpusf);
-	if(!fs::is_directory(icorpus)) {
-		std::cerr << "Input corpus directory does not exist" <<std::endl;
-		return 7;
-	}
-	fs::path ocorpus(ocorpusf);
-	if(!fs::is_directory(ocorpus)) {
-		std::cerr << "Output corpus directory does not exist" <<std::endl;
-		return 8;
-	}
-	return relabel_corpus(oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0);
+  fs::ifstream idf(idff);
+  if(!newvocab.good()) {
+    std::cerr << "Original idf file no good" <<std::endl;
+    return 4;
+  }
+  fs::ifstream vectors(vecf);
+  if(!vectors.good()) {
+    std::cerr << "Original vectors file no good" <<std::endl;
+    return 5;
+  }
+  fs::ifstream centers(centersf);
+  if(!vectors.good()) {
+    std::cerr << "Cluster centers file no good" <<std::endl;
+    return 6;
+  }
+  fs::path icorpus(icorpusf);
+  if(!fs::is_directory(icorpus)) {
+    std::cerr << "Input corpus directory does not exist" <<std::endl;
+    return 7;
+  }
+  fs::path ocorpus(ocorpusf);
+  if(!fs::is_directory(ocorpus)) {
+    std::cerr << "Output corpus directory does not exist" <<std::endl;
+    return 8;
+  }
+  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0);
 }
