@@ -1,0 +1,10 @@
+CClusterContexts
+CExpandVocab
+CExtractContexts
+CRelabelCorpus
+.anjuta/
+.anjuta_sym_db.db
+.clang_complete
+*~
+*.o
+
