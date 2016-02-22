@@ -158,4 +158,19 @@ year = 2012
   pages     = {801--805},
   year      = {2013}
 }
+
+@article{10.1109/TKDE.2011.176,
+author = {Robson L.F. Cordeiro and Agma J.M. Traina and Christos Faloutsos and Caetano Traina Jr.},
+title = {Halite: Fast and Scalable Multiresolution Local-Correlation Clustering},
+journal ={IEEE Transactions on Knowledge and Data Engineering},
+volume = {25},
+number = {2},
+issn = {1041-4347},
+year = {2013},
+pages = {387-401},
+doi = {http://doi.ieeecomputersociety.org/10.1109/TKDE.2011.176},
+publisher = {IEEE Computer Society},
+address = {Los Alamitos, CA, USA},
+}
+
 ````
