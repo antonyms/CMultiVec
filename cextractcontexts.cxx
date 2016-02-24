@@ -51,7 +51,7 @@ struct FileCacheEntry {
 
 class CachingFileArray {
 public:
-  CachingFileArray(std::function<std::string (size_t)> f_namer, size_t numFiles, size_t cachesize): cachesize(cachesize), file_namer(f_namer), entries(numFiles)  {
+  CachingFileArray(std::function<std::string (size_t)> f_namer, size_t numFiles, size_t cachesize): cachesize(cachesize), file_namer(f_namer), queuesize(0), entries(numFiles)  {
 
   }
 
@@ -65,7 +65,7 @@ public:
       }
       return e.file;
     } else { //cache miss
-      if(queue.size() >= cachesize) {
+      if(queuesize >= cachesize) {
 	closeOldestFile();
       }
       return openFile(id);
@@ -87,6 +87,7 @@ protected:
       return NULL;
     }
     queue.push_front(&e);
+    queuesize++;
     e.iterator=queue.begin();
 
     e.initialized=true;
@@ -98,20 +99,22 @@ protected:
     if(!queue.empty()) {
       FileCacheEntry* e = queue.back();
       queue.pop_back();
-
+      queuesize--;
+      
       fclose(e->file);
       e->file=NULL;
       return true;
     } else {
       return false;
     }
-  }
+}
+    
 
-
-  size_t cachesize;
-  std::function<std::string (size_t)> file_namer;
-  std::list<FileCacheEntry*> queue;
-  std::vector<FileCacheEntry> entries;
+    size_t cachesize;
+std::function<std::string (size_t)> file_namer;
+std::list<FileCacheEntry*> queue;
+size_t queuesize;
+std::vector<FileCacheEntry> entries;
 };
 
 int compute_and_output_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat& origvects, CachingFileArray& outfiles,unsigned int vecdim, unsigned int contextsize, int prune) {
