@@ -183,8 +183,8 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	}
 	//set limit of open files high enough to open a file for every word in the dictionary.
 	rlimit lim;
-	lim.rlim_cur=vsize+1024; //1024 extra files just to be safe;
-	lim.rlim_max=vsize+1024;
+	lim.rlim_cur=fcachesize+1024; //1024 extra files just to be safe;
+	lim.rlim_max=fcachesize+1024;
 	setrlimit(RLIMIT_NOFILE , &lim);
 
 	CachingFileArray outfiles(
