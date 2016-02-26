@@ -142,142 +142,160 @@ public:
 };
 #endif
 
+int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker) {
 
+  boost::unordered_map<std::string, int> vocabmap;
+  std::vector<std::string> vocab;
+  std::vector<float> idfs;
+  arma::fmat origvects(vecdim, 5);
 
-int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed, boost::optional<const std::string&> digit_rep) {
-
-	boost::unordered_map<std::string, int> vocabmap;
-	std::vector<std::string> vocab;
-	std::vector<float> idfs;
-	arma::fmat origvects(vecdim, 5);
-
-	std::unique_ptr<SphericalKMeansClassifier> kmeans;
+  std::unique_ptr<SphericalKMeansClassifier> kmeans;
 	
 #ifdef ENABLE_HALITE
-	std::unique_ptr<HaliteClassifier> halite;
+  std::unique_ptr<HaliteClassifier> halite;
 #else
-	std::cerr<<"Error: Attempted to use Halite clustering format when it was disabled at compile time\n";
-	exit(1);	  
+  std::cerr<<"Error: Attempted to use Halite clustering format when it was disabled at compile time\n";
+  exit(1);	  
 #endif
 	
-	if(format == SphericalKMeans) {
-	  kmeans = std::unique_ptr<SphericalKMeansClassifier>(new SphericalKMeansClassifier(vecdim));
-	} else if(format == HaliteAlgo) {
+  if(format == SphericalKMeans) {
+    kmeans = std::unique_ptr<SphericalKMeansClassifier>(new SphericalKMeansClassifier(vecdim));
+  } else if(format == HaliteAlgo) {
 #ifdef ENABLE_HALITE
-	  halite = std::unique_ptr<HaliteClassifier>(new HaliteClassifier(vecdim));
+    halite = std::unique_ptr<HaliteClassifier>(new HaliteClassifier(vecdim));
 #endif
 	  
-	}
+  }
 
-	unsigned int index=0;
+  unsigned int index=0;
+  std::string word;
+  std::string newword;
+  getline(newvocabstream,newword);
+  size_t nextclusteridx;
+  centerstream >> nextclusteridx;
+  while(getline(vocabstream,word)) {
+    vocab.push_back(word);
+		
+    float idf;
+    idfstream >> idf;
+    idfs.push_back(idf);
+		
+    if(index>=origvects.n_cols) { 
+      origvects.resize(vecdim, origvects.n_cols*2);
+    }
+    for(unsigned int i=0; i<vecdim; i++) {
+      vecstream >> origvects(i,index);
+    }
+    if(format == SphericalKMeans) {
+      kmeans->addCenters(word, newword, newvocabstream, centerstream);
+    } else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+      halite->addClusters(index, nextclusteridx, centerstream);
+#endif
+    }
+    index++;
+  }
+
+  int startdoci, enddoci;
+
+  try {
+    startdoci = vocabmap.at(ssmarker);
+  } catch(std::out_of_range& e) {
+    std::cerr<<"Error: Start of sentence fill marker is not in the vocabulary.\n";
+    return 5;
+  }
+  try {
+    enddoci = vocabmap.at(esmarker);
+  } catch(std::out_of_range& e) {
+    std::cerr<<"Error: End of sentence fill marker is not in the vocabulary.\n";
+    return 6;
+  }
+  try {
+    for (boost::filesystem::directory_iterator itr(icorpus); itr!=boost::filesystem::directory_iterator(); ++itr) {
+      if(itr->path().extension()!=".txt") {
+	continue;
+      }
+
+      fs::ifstream corpusreader(itr->path());
+      if(!corpusreader.good()) {
+	return 7;
+      }
+      fs::ofstream corpuswriter(ocorpus / itr->path().filename());
+      if(!corpusreader.good()) {
+	return 8;
+      }
+      std::cout << "Reading corpus file " << itr->path() << std::endl;
+
+      //Keeps track of the accumulated contexts of the previous 5 words, the current word, and the next 5 words
+      boost::circular_buffer<int > context(2*contextsize+1);
+
+      do {
+	context.clear();
+	for(unsigned int i=0; i<contextsize; i++) {
+	  context.push_back(startdoci);
+	}
 	std::string word;
-	std::string newword;
-	getline(newvocabstream,newword);
-	size_t nextclusteridx;
-	centerstream >> nextclusteridx;
-	while(getline(vocabstream,word)) {
-		vocab.push_back(word);
-		vocabmap[word]=index;
-		
-		float idf;
-		idfstream >> idf;
-		idfs.push_back(idf);
-		
-		if(index>=origvects.n_cols) { 
-			origvects.resize(vecdim, origvects.n_cols*2);
-		}
-		for(unsigned int i=0; i<vecdim; i++) {
-			vecstream >> origvects(i,index);
-		}
-		if(format == SphericalKMeans) {
-		  kmeans->addCenters(word, newword, newvocabstream, centerstream);
-		} else if(format == HaliteAlgo) {
-#ifdef ENABLE_HALITE
-		  halite->addClusters(index, nextclusteridx, centerstream);
-#endif
-		}
-		index++;
+	for(unsigned int i=0; i<contextsize; i++) {
+	  if(getline(corpusreader,word)) {
+	    if(word == eodmarker) goto EOD;
+	    int wind=read_index(word,vocab.size());
+
+	    context.push_back(wind);
+	  }
 	}
 
-	int startdoci=lookup_word(vocabmap,"<s>", false, boost::optional<const std::string&>());
-	int enddoci=lookup_word(vocabmap,"<\\s>", false, boost::optional<const std::string&>());
-	
-	for (boost::filesystem::directory_iterator itr(icorpus); itr!=boost::filesystem::directory_iterator(); ++itr) {
-		if(itr->path().extension()!=".txt") {
-			continue;
-		}
+	while(getline(corpusreader,word)) {
+	  if(word == eodmarker) goto EOD;
+	  int nextind=read_index(word, vocab.size());
 
-		fs::ifstream corpusreader(itr->path());
-		if(!corpusreader.good()) {
-			return 7;
-		}
-		fs::ofstream corpuswriter(ocorpus / itr->path().filename());
-		if(!corpusreader.good()) {
-			return 8;
-		}
-			std::cout << "Reading corpus file " << itr->path() << std::endl;
+	  context.push_back(nextind);
 
-		//Keeps track of the accumulated contexts of the previous 5 words, the current word, and the next 5 words
-		boost::circular_buffer<int > context(2*contextsize+1);
+	  int wid=context[contextsize];
+	  int meaning=0;
 
-		do {
-			context.clear();
-			for(unsigned int i=0; i<contextsize; i++) {
-				context.push_back(startdoci);
-			}
-			std::string word;
-			for(unsigned int i=0; i<contextsize+1; i++) {
-				if(getline(corpusreader,word)) {
-					if(word==eodmarker) goto EOD;
-					int wind=lookup_word(vocabmap,word,indexed, digit_rep);
-					context.push_back(wind);
-				}
-			}
-
-			while(getline(corpusreader,word)) {
-				if(word==eodmarker) goto EOD;
-
-				int wid=context[contextsize];
-				int meaning=0;
-
-				if(format == SphericalKMeans) {
-				  meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
-				} else if(format == HaliteAlgo) {
+	  if(format == SphericalKMeans) {
+	    meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
+	  } else if(format == HaliteAlgo) {
 #ifdef ENABLE_HALITE
-				  meaning = halite->convertWord(context, idfs, origvects, contextsize);
+	    meaning = halite->convertWord(context, idfs, origvects, contextsize);
 #endif
-				}
+	  }
 				
-				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
-				context.pop_front();
-				int nextind=lookup_word(vocabmap, word, indexed, digit_rep);
-				context.push_back(nextind);
-			}
-			EOD:
-			unsigned int k=0;
-			while(context.size()<2*contextsize+1) {
-					context.push_back(enddoci);
-					k++;
-			}
-			for(; k<contextsize; k++) {
-				int wid=context[contextsize];
-				int meaning=0;
-
-				if(format == SphericalKMeans) {
-				  meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
-				} else if(format == HaliteAlgo) {
-#ifdef ENABLE_HALITE
-				  meaning = halite->convertWord(context, idfs, origvects, contextsize);
-#endif
-				}
-
-				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
-				context.pop_front();
-				context.push_back(enddoci);
-			}
-		} while(!corpusreader.eof());
+	  corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
+	  context.pop_front();
 	}
-	return 0;
+      EOD:
+	unsigned int k=0;
+	while(context.size()<2*contextsize+1) {
+	  context.push_back(enddoci);
+	  k++;
+	}
+	for(; k<contextsize; k++) {
+	  int wid=context[contextsize];
+	  int meaning=0;
+
+	  if(format == SphericalKMeans) {
+	    meaning = kmeans->convertWord(context,  idfs, origvects, contextsize);
+	  } else if(format == HaliteAlgo) {
+#ifdef ENABLE_HALITE
+	    meaning = halite->convertWord(context, idfs, origvects, contextsize);
+#endif
+	  }
+
+	  corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
+	  context.pop_front();
+	  context.push_back(enddoci);
+	}
+      } while(!corpusreader.eof());
+    }
+  } catch(std::invalid_argument& e) {
+    std::cerr<<"Error, non-numerical line found in indexed corpus.\n  Please make sure your corpus is in the right format.\n";
+    return 9;
+  } catch(std::out_of_range& e) {
+    std::cerr << "Error, found out of bound index in indexed file.\n";
+    return 10;
+  }  
+  return 0;
 }
 
 int main(int argc, char** argv) {
@@ -291,7 +309,7 @@ int main(int argc, char** argv) {
 
   unsigned int vecdim;
   unsigned int contextsize;
-  std::string eod;
+  std::string eod, ssmarker, esmarker;
   std::string digit_rep;
   po::options_description desc("CRelabelCorpus Options");
   desc.add_options()
@@ -307,9 +325,9 @@ int main(int argc, char** argv) {
     ("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
     ("dim,d", po::value<unsigned int>(&vecdim)->value_name("<number>")->default_value(50), "dimension of word vectors")
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
-    ("eodmarker",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
-    ("preindexed","indicates the corpus is pre-indexed with the vocab file")
-    ("digify", po::value<std::string>(&digit_rep)->value_name("<string>"), "Digify numbers tokens by replacing all digits with the given string") 
+    ("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
+    ("ssmarker", po::value<std::string>(&ssmarker)->value_name("<string>")->default_value("<s>"),"start of sentence fill marker")
+    ("esmarker", po::value<std::string>(&esmarker)->value_name("<string>")->default_value("</s>"), "end sentence fill marker")
     ;
 
 	
@@ -380,5 +398,5 @@ int main(int argc, char** argv) {
   if(!digit_rep.empty()) {
     digit_rep_arg=digit_rep;
   }
-  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0, digit_rep);
+  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, ssmarker, esmarker);
 }

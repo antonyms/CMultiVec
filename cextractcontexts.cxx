@@ -142,122 +142,143 @@ int compute_and_output_context(const boost::circular_buffer<int>& context, const
 	return 0;
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed, boost::optional<const std::string&> digit_rep, unsigned int prune, unsigned int fcachesize) {
-	boost::unordered_map<std::string, int> vocabmap;
-	std::vector<std::string> vocab;
-	std::vector<float> idfs;
-	arma::fmat origvects(vecdim,5);
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker, unsigned int prune, unsigned int fcachesize) {
+  boost::unordered_map<std::string, int> vocabmap;
+  std::vector<std::string> vocab;
+  std::vector<float> idfs;
+  arma::fmat origvects(vecdim,5);
 	
-	std::string word;
-	unsigned int index=0;
-	while(getline(vocabstream,word)) {
-		vocab.push_back(word);
-		vocabmap[word]=index;
+  std::string word;
+  unsigned int index=0;
+  while(getline(vocabstream,word)) {
+    vocab.push_back(word);
+    vocabmap[word]=index;
 
-		float tf;
-		tfidfstream >>tf;
-		idfs.push_back(tf);
+    float tf;
+    tfidfstream >>tf;
+    idfs.push_back(tf);
 
-		if(index>=origvects.n_cols) {
-			origvects.resize(origvects.n_rows,origvects.n_cols*2);
-		}
+    if(index>=origvects.n_cols) {
+      origvects.resize(origvects.n_rows,origvects.n_cols*2);
+    }
 		
-		for(int i=0; i<vecdim; i++) {
-			vectorstream>>origvects(i,index);
-		}
-		index++;
-	}
+    for(int i=0; i<vecdim; i++) {
+      vectorstream>>origvects(i,index);
+    }
+    index++;
+  }
 
-	vocabstream.close();
-	tfidfstream.close();
-	vectorstream.close();
+  vocabstream.close();
+  tfidfstream.close();
+  vectorstream.close();
 
+  int startdoci, enddoci;
 
-	int startdoci=lookup_word(vocabmap,"<s>",false, boost::optional<const std::string&>());
-	int enddoci=lookup_word(vocabmap,"<\\s>",false, boost::optional<const std::string&>());
-
-	unsigned int vsize=vocab.size();
-
-	if(prune && prune <vsize) {
-		vsize=prune;
-	}
-	if(fcachesize==0) {
-	  fcachesize=vsize;
-	}
-	//set limit of open files high enough to open a file for every word in the dictionary.
-	rlimit lim;
-	lim.rlim_cur=fcachesize+1024; //1024 extra files just to be safe;
-	lim.rlim_max=fcachesize+1024;
-	setrlimit(RLIMIT_NOFILE , &lim);
-
-	CachingFileArray outfiles(
-				  [&outdir](size_t i) {
-				    std::ostringstream s;
-				    s<<outdir<<"/"<< i << ".vectors";
-				    return s.str();
-				  },
-				  vsize, fcachesize);
-
-	for (boost::filesystem::directory_iterator itr(indir); itr!=boost::filesystem::directory_iterator(); ++itr) {
-		std::string path=itr->path().string();
-		if(!boost::algorithm::ends_with(path,".txt")) {
-			continue;
-		}
-
-		std::ifstream corpusreader(path.c_str());
-		if(!corpusreader.good()) {
-			return 7;
-		}
-
-		std::cout << "Reading corpus file " << path << std::endl;
-
-		//Keeps track of the accumulated contexts of the previous 5 words, the current word, and the next 5 words
-		boost::circular_buffer<int > context(2*contextsize+1);
-
-		do {
-			context.clear();
-			for(unsigned int i=0; i<contextsize; i++) {
-				context.push_back(startdoci);
-			}
-			std::string word;
-			for(unsigned int i=0; i<contextsize+1; i++) {
-				if(getline(corpusreader,word)) {
-					if(word==eodmarker) goto EOD;
-					int wind=lookup_word(vocabmap, word, indexed, digit_rep);
-					context.push_back(wind);
-				}
-			}
-
-			while(getline(corpusreader,word)) {
-				if(word==eodmarker) goto EOD;
-				int retcode=compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
-				if(retcode) return retcode;
-				
-				context.pop_front();
-				int newind=lookup_word(vocabmap, word, indexed, digit_rep);
-				context.push_back(newind);
-			}
-			EOD:
-			unsigned int k=0;
-			while(context.size()<2*contextsize+1) {
-					context.push_back(enddoci);
-					k++;
-			}
-			for(; k<contextsize; k++) {
-				int retcode = compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
-				if(retcode) return retcode;
-				context.pop_front();
-				context.push_back(enddoci);
-			}
-		} while(!corpusreader.eof());
-	}
-	std::cout << "Closing files" <<std::endl;
-	/*
-	// Not necessary, since exiting properly will clean up anyway (And is much faster)
-	  outfiles.closeAll();
-	*/
+  try {
+    startdoci = vocabmap.at(ssmarker);
+  }catch(std::out_of_range& e) {
+    std::cerr<<"Error: Start of sentence fill marker is not in the vocabulary.\n";
+    return 5;
+  }
+  try {
+    enddoci = vocabmap.at(esmarker);
+  }catch(std::out_of_range& e) {
+    std::cerr<<"Error: End of sentence fill marker is not in the vocabulary.\n";
+    return 6;
+  }
 	
-	return 0;
+  unsigned int vsize=vocab.size();
+
+  if(prune && prune <vsize) {
+    vsize=prune;
+  }
+  if(fcachesize==0) {
+    fcachesize=vsize;
+  }
+  //set limit of open files high enough to open a file for every word in the dictionary.
+  rlimit lim;
+  lim.rlim_cur=fcachesize+1024; //1024 extra files just to be safe;
+  lim.rlim_max=fcachesize+1024;
+  setrlimit(RLIMIT_NOFILE , &lim);
+
+  CachingFileArray outfiles(
+			    [&outdir](size_t i) {
+			      std::ostringstream s;
+			      s<<outdir<<"/"<< i << ".vectors";
+			      return s.str();
+			    },
+			    vsize, fcachesize);
+
+  try {
+    for (boost::filesystem::directory_iterator itr(indir); itr!=boost::filesystem::directory_iterator(); ++itr) {
+      std::string path=itr->path().string();
+      if(!boost::algorithm::ends_with(path,".txt")) {
+	continue;
+      }
+
+      std::ifstream corpusreader(path.c_str());
+      if(!corpusreader.good()) {
+	return 7;
+      }
+
+      std::cout << "Reading corpus file " << path << std::endl;
+
+      //Keeps track of the accumulated contexts of the previous 5 words, the current word, and the next 5 words
+      boost::circular_buffer<int> context(2*contextsize+1);
+
+      do {
+	context.clear();
+	for(unsigned int i=0; i<contextsize; i++) {
+	  context.push_back(startdoci);
+	}
+	std::string word;
+	for(unsigned int i=0; i<contextsize; i++) {
+	  if(getline(corpusreader,word)) {
+	    if(word == eodmarker) goto EOD;
+	    int wind=read_index(word, vocab.size());				  
+	    context.push_back(wind);
+	  }
+	}
+
+	while(getline(corpusreader,word)) {
+	  if(word == eodmarker) goto EOD;
+	  int newind=read_index(word,vocab.size());
+	  context.push_back(newind);
+	  int retcode=compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
+	  if(retcode) return retcode;
+			  
+	  context.pop_front();
+	}
+      EOD:
+	unsigned int k=0;
+	while(context.size()<2*contextsize+1) {
+	  context.push_back(enddoci);
+	  k++;
+	}
+	for(; k<contextsize; k++) {
+	  int retcode = compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
+	  if(retcode) return retcode;
+		    
+	  context.pop_front();
+	  context.push_back(enddoci);
+	}
+      } while(!corpusreader.eof());
+    }
+  } catch(std::invalid_argument& e) {
+    std::cerr<<"Error, non-numerical line found in indexed corpus.\n  Please make sure your corpus is in the right format.\n";
+    return 9;
+  } catch(std::out_of_range& e) {
+    std::cerr << "Error, found out of bounds index in indexed file.\n";
+    return 10;
+  }  
+
+  std::cout << "Closing files" <<std::endl;
+  /*
+  // Not necessary, since exiting properly will clean up anyway (And is much faster)
+  outfiles.closeAll();
+  */
+	
+  return 0;
 }
 
 
@@ -270,9 +291,8 @@ int main(int argc, char** argv) {
   std::string outd;
   int dim;
   unsigned int contextsize;
-  std::string eod;
+  std::string ssmarker, esmarker, eod;
 
-  std::string digit_rep;
   unsigned int prune=0;
   unsigned int fcachesize=0;
   po::options_description desc("CExtractContexts Options");
@@ -286,9 +306,9 @@ int main(int argc, char** argv) {
     ("dim,d", po::value<int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
     ("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
-    ("preindexed","indicates the corpus is pre-indexed with the vocab file")
-    ("digify",po::value<std::string>(&digit_rep)->value_name("<string>"),"Digify number tokens by replacing all digits with the given string")
-    ("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab")
+    ("ssmarker", po::value<std::string>(&ssmarker)->value_name("<string>")->default_value("<s>"),"start of sentence fill marker")
+    ("esmarker", po::value<std::string>(&esmarker)->value_name("<string>")->default_value("</s>"), "end sentence fill marker")
+     ("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab")
     ("fcachesize,f", po::value<unsigned int>(&fcachesize)->value_name("<number>"), "maximum number of files to open at once");
 		
 	
@@ -337,11 +357,7 @@ int main(int argc, char** argv) {
       return 6;
     }
 
-    boost::optional<const std::string&> digit_rep_arg;
-    if(!digit_rep.empty()) {
-      digit_rep_arg=digit_rep;
-    }
-    return extract_contexts(vocab, frequencies, vectors, corpusd,outd,dim,contextsize,eod,vm.count("preindexed")>0, digit_rep_arg, prune, fcachesize);
+    return extract_contexts(vocab, frequencies, vectors, corpusd, outd, dim, contextsize, eod, ssmarker, esmarker, prune, fcachesize);
 }
 
 

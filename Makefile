@@ -7,6 +7,7 @@ endif
 
 CC = g++
 CFLAGS += -g -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
+IOBJECTS = cindexcorpus.o
 EOBJECTS = cextractcontexts.o
 COBJECTS += cclustercontexts.o
 VOBJECTS = cexpandvocab.o
@@ -15,7 +16,10 @@ INCFLAGS =
 LDFLAGS += -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack -larmadillo
 LIBS = 
 
-all: CExtractContexts CClusterContexts CExpandVocab CRelabelCorpus
+all: CIndexCorpus CExtractContexts CClusterContexts CExpandVocab CRelabelCorpus
+
+CIndexCorpus: $(IOBJECTS)
+	$(CC) -o CIndexCorpus $(IOBJECTS) $(LDFLAGS) $(LIBS)
 
 CExtractContexts: $(EOBJECTS)
 	$(CC) -o CExtractContexts $(EOBJECTS) $(LDFLAGS) $(LIBS)

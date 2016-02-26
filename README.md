@@ -5,6 +5,7 @@ words, with multiple prototypes per word.  It is based on Huang Socher
 
 It includes
 
+* CIndexCorpus: A tool for indexing and de-indexing a corpus according to a vocab file.
 * CExtractContexts: A tool for extracting context representations from a large corpus 
 * CClusterContexts: A tool for clustering large numbers of context representations
 * CExpandVocab: A tool for generating vocabulary files and the data needed to relabel a corpus
@@ -23,6 +24,11 @@ the command line options, just run any of the tools with the -h option.
 
 The data formats section below will also help you understand the inputs 
 and outputs of these tools
+
+##CIndexCorpus
+If your corpus is already indexed (i.e. it contains the vocab ids of the 
+words instead of the words themselves) you can skip this step.
+
 
 ##CExtractContexts
 CExtractContexts creates a Context Directory from a corpus.  By default 
