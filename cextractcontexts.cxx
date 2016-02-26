@@ -142,7 +142,7 @@ int compute_and_output_context(const boost::circular_buffer<int>& context, const
 	return 0;
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed, unsigned int prune, unsigned int fcachesize) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed, boost::optional<const std::string&> digit_rep, unsigned int prune, unsigned int fcachesize) {
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
 	std::vector<float> idfs;
@@ -173,8 +173,8 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	vectorstream.close();
 
 
-	int startdoci=lookup_word(vocabmap,"<s>",false);
-	int enddoci=lookup_word(vocabmap,"<\\s>",false);
+	int startdoci=lookup_word(vocabmap,"<s>",false, boost::optional<const std::string&>());
+	int enddoci=lookup_word(vocabmap,"<\\s>",false, boost::optional<const std::string&>());
 
 	unsigned int vsize=vocab.size();
 
@@ -223,7 +223,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 			for(unsigned int i=0; i<contextsize+1; i++) {
 				if(getline(corpusreader,word)) {
 					if(word==eodmarker) goto EOD;
-					int wind=lookup_word(vocabmap,word,indexed);
+					int wind=lookup_word(vocabmap, word, indexed, digit_rep);
 					context.push_back(wind);
 				}
 			}
@@ -234,7 +234,7 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 				if(retcode) return retcode;
 				
 				context.pop_front();
-				int newind=lookup_word(vocabmap,word,indexed);
+				int newind=lookup_word(vocabmap, word, indexed, digit_rep);
 				context.push_back(newind);
 			}
 			EOD:
@@ -271,6 +271,8 @@ int main(int argc, char** argv) {
   int dim;
   unsigned int contextsize;
   std::string eod;
+
+  std::string digit_rep;
   unsigned int prune=0;
   unsigned int fcachesize=0;
   po::options_description desc("CExtractContexts Options");
@@ -285,57 +287,61 @@ int main(int argc, char** argv) {
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
     ("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
     ("preindexed","indicates the corpus is pre-indexed with the vocab file")
+    ("digify",po::value<std::string>(&digit_rep)->value_name("<string>"),"Digify number tokens by replacing all digits with the given string")
     ("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab")
     ("fcachesize,f", po::value<unsigned int>(&fcachesize)->value_name("<number>"), "maximum number of files to open at once");
 		
-
 	
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
 
-	if (vm.count("help")) {
-            std::cout << desc << "\n";
-            return 0;
-   }
+    if (vm.count("help")) {
+      std::cout << desc << "\n";
+      return 0;
+    }
 
-	try {
-		po::notify(vm);
-	} catch(po::required_option& exception) {
-		std::cerr << "Error: " << exception.what() << "\n";
-		std::cout << desc << "\n";
-        return 1;
-	}
+    try {
+      po::notify(vm);
+    } catch(po::required_option& exception) {
+      std::cerr << "Error: " << exception.what() << "\n";
+      std::cout << desc << "\n";
+      return 1;
+    }
 	
-	std::ifstream vocab(vocabf);
-	if(!vocab.good()) {
-		std::cerr << "Vocab file no good" <<std::endl;
-		return 2;
-	}
+    std::ifstream vocab(vocabf);
+    if(!vocab.good()) {
+      std::cerr << "Vocab file no good" <<std::endl;
+      return 2;
+    }
 
-	std::ifstream frequencies(idff);
-	if(!frequencies.good()) {
-		std::cerr << "Frequencies file no good" <<std::endl;
-		return 3;
-	}
+    std::ifstream frequencies(idff);
+    if(!frequencies.good()) {
+      std::cerr << "Frequencies file no good" <<std::endl;
+      return 3;
+    }
 
-	std::ifstream vectors(vecf);
-	if(!vectors.good()) {
-		std::cerr << "Vectors file no good" <<std::endl;
-		return 4;
-	}
+    std::ifstream vectors(vecf);
+    if(!vectors.good()) {
+      std::cerr << "Vectors file no good" <<std::endl;
+      return 4;
+    }
 
 
-	if(!boost::filesystem::is_directory(corpusd)) {
-		std::cerr << "Input directory does not exist" <<std::endl;
-		return 5;
-	}
+    if(!boost::filesystem::is_directory(corpusd)) {
+      std::cerr << "Input directory does not exist" <<std::endl;
+      return 5;
+    }
 
-	if(!boost::filesystem::is_directory(outd)) {
-		std::cerr << "Input directory does not exist" <<std::endl;
-		return 6;
-	}
+    if(!boost::filesystem::is_directory(outd)) {
+      std::cerr << "Input directory does not exist" <<std::endl;
+      return 6;
+    }
 
-	return extract_contexts(vocab, frequencies, vectors, corpusd,outd,dim,contextsize,eod,vm.count("preindexed")>0,prune, fcachesize);
+    boost::optional<const std::string&> digit_rep_arg;
+    if(!digit_rep.empty()) {
+      digit_rep_arg=digit_rep;
+    }
+    return extract_contexts(vocab, frequencies, vectors, corpusd,outd,dim,contextsize,eod,vm.count("preindexed")>0, digit_rep_arg, prune, fcachesize);
 }
 
 

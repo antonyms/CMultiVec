@@ -27,6 +27,8 @@
 #define COMMON_H
 #include "boost/circular_buffer.hpp"
 #include "boost/unordered_map.hpp"
+#include "boost/optional.hpp"
+#include <regex>
 
 #include <armadillo>
 
@@ -35,15 +37,28 @@ enum ClusterAlgos {
   HaliteAlgo
 };
 
-int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed) {
-	if(indexed) {
-		return std::stoi(word)-1;
-	} else {
-		boost::unordered_map<std::string,int>::const_iterator index=vocabmap.find(word);
-		if(index==vocabmap.end()) {
-			return 0;  //Unknown words are mapped to 0, so the first word in your vocab better be unknown
-		}
-		return index->second;}
+static std::regex numregex("[-+]?\\d*\\.?\\d+", std::regex::ECMAScript | std::regex::optimize);
+static std::regex digitregex("\\d", std::regex::ECMAScript | std::regex::optimize);
+int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool indexed, boost::optional<const std::string&> digit_rep) {
+  if(indexed) {
+    return std::stoi(word)-1;
+  } else {
+    boost::unordered_map<std::string,int>::const_iterator index = vocabmap.find(word);
+    if(index != vocabmap.end()) {
+      return index->second;
+    }
+    
+    if(digit_rep.is_initialized()) {
+      if(std::regex_match(word,numregex)) {
+	std::string digified = std::regex_replace(word, digitregex, *digit_rep);
+	index=vocabmap.find(digified);
+	if(index !=vocabmap.end()){
+	  return index->second;
+	}
+      }
+    }
+    return 0;  //Unknown words are mapped to 0, so the first word in your vocab better be unknown
+  } 
 }
 
 void compute_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects, arma::fvec& outvec, unsigned int vecdim, unsigned int contextsize) {

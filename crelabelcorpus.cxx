@@ -144,7 +144,7 @@ public:
 
 
 
-int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed) {
+int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, bool indexed, boost::optional<const std::string&> digit_rep) {
 
 	boost::unordered_map<std::string, int> vocabmap;
 	std::vector<std::string> vocab;
@@ -199,8 +199,8 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 		index++;
 	}
 
-	int startdoci=lookup_word(vocabmap,"<s>",false);
-	int enddoci=lookup_word(vocabmap,"<\\s>",false);
+	int startdoci=lookup_word(vocabmap,"<s>", false, boost::optional<const std::string&>());
+	int enddoci=lookup_word(vocabmap,"<\\s>", false, boost::optional<const std::string&>());
 	
 	for (boost::filesystem::directory_iterator itr(icorpus); itr!=boost::filesystem::directory_iterator(); ++itr) {
 		if(itr->path().extension()!=".txt") {
@@ -229,7 +229,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 			for(unsigned int i=0; i<contextsize+1; i++) {
 				if(getline(corpusreader,word)) {
 					if(word==eodmarker) goto EOD;
-					int wind=lookup_word(vocabmap,word,indexed);
+					int wind=lookup_word(vocabmap,word,indexed, digit_rep);
 					context.push_back(wind);
 				}
 			}
@@ -250,7 +250,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 				
 				corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
 				context.pop_front();
-				int nextind=lookup_word(vocabmap,word,indexed);
+				int nextind=lookup_word(vocabmap, word, indexed, digit_rep);
 				context.push_back(nextind);
 			}
 			EOD:
@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
   unsigned int vecdim;
   unsigned int contextsize;
   std::string eod;
-	
+  std::string digit_rep;
   po::options_description desc("CRelabelCorpus Options");
   desc.add_options()
     ("help,h", "produce help message")
@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
     ("eodmarker",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
     ("preindexed","indicates the corpus is pre-indexed with the vocab file")
-    
+    ("digify", po::value<std::string>(&digit_rep)->value_name("<string>"), "Digify numbers tokens by replacing all digits with the given string") 
     ;
 
 	
@@ -376,5 +376,9 @@ int main(int argc, char** argv) {
     std::cerr << "Output corpus directory does not exist" <<std::endl;
     return 8;
   }
-  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0);
+  boost::optional<const std::string&> digit_rep_arg;
+  if(!digit_rep.empty()) {
+    digit_rep_arg=digit_rep;
+  }
+  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, vm.count("preindexed")>0, digit_rep);
 }
