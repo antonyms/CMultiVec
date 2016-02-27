@@ -28,45 +28,29 @@
 #include "boost/circular_buffer.hpp"
 #include "boost/unordered_map.hpp"
 #include "boost/optional.hpp"
+#include <boost/program_options.hpp>
 #include <regex>
 
 #include <armadillo>
+
 
 enum ClusterAlgos {
   SphericalKMeans,
   HaliteAlgo
 };
 
-int read_index(const std::string& index, int vocabsize) {
-  int result=std::stoi(index);
-  if(result<0 || result>=vocabsize) {
-    throw std::out_of_range("Out of vocab range");
-  }
-  return result;
-}
+
+void add_eod_option(boost::program_options::options_description& desc, std::string* eodmarker);
+void add_context_options(boost::program_options::options_description& desc, std::string* ssmarker, std::string* esmarker);
+void add_indexing_options(boost::program_options::options_description& desc, std::string* oovtoken, std::string* digit_rep);
 
 
 
-void compute_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects, arma::fvec& outvec, unsigned int vecdim, unsigned int contextsize) {
-	
-	float idfc[2*contextsize+1]; //idf context window
+int read_index(const std::string& index, int vocabsize);
 
-	//Look up the idfs of the words in context
-	std::transform(context.begin(),context.end(),idfc,[&idfs](int c) ->float {return idfs[c];});
 
-	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],(float)0);
-	if(idfsum==0) {
-		return;
-	}
-	float invidfsum=1/idfsum; 
+int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, bool preindexed, int oovind, boost::optional<const std::string&> digit_rep);
 
-	for(unsigned int i=0; i<contextsize; i++) {
-		float idfterm=idfc[i]*invidfsum;
-		std::transform(outvec.begin(), outvec.end(),origvects.unsafe_col(context[i]).begin(), outvec.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
-	}
-	for(unsigned int i=contextsize+1; i<2*contextsize+1; i++) {
-		float idfterm=idfc[i]*invidfsum;
-		std::transform(outvec.begin(), outvec.end(),origvects.unsafe_col(context[i]).begin(), outvec.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
-	}
-}
+void compute_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects, arma::fvec& outvec, unsigned int vecdim, unsigned int contextsize);
+
 #endif

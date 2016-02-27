@@ -325,9 +325,6 @@ int main(int argc, char** argv) {
     ("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
     ("dim,d", po::value<unsigned int>(&vecdim)->value_name("<number>")->default_value(50), "dimension of word vectors")
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
-    ("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
-    ("ssmarker", po::value<std::string>(&ssmarker)->value_name("<string>")->default_value("<s>"),"start of sentence fill marker")
-    ("esmarker", po::value<std::string>(&esmarker)->value_name("<string>")->default_value("</s>"), "end sentence fill marker")
     ;
 
 	

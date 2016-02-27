@@ -7,11 +7,11 @@ endif
 
 CC = g++
 CFLAGS += -g -O2 -Wall -std=c++11 `pkg-config --cflags libxml-2.0`
-IOBJECTS = cindexcorpus.o
-EOBJECTS = cextractcontexts.o
-COBJECTS += cclustercontexts.o
-VOBJECTS = cexpandvocab.o
-ROBJECTS = crelabelcorpus.o
+IOBJECTS = cindexcorpus.o common.o
+EOBJECTS = cextractcontexts.o common.o
+COBJECTS += cclustercontexts.o common.o
+VOBJECTS = cexpandvocab.o common.o
+ROBJECTS = crelabelcorpus.o common.o
 INCFLAGS =
 LDFLAGS += -lboost_filesystem -lboost_system -lboost_program_options -lboost_iostreams -lmlpack -larmadillo
 LIBS = 

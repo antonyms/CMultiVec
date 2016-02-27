@@ -142,7 +142,7 @@ int compute_and_output_context(const boost::circular_buffer<int>& context, const
 	return 0;
 }
 
-int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker, unsigned int prune, unsigned int fcachesize) {
+int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std::ifstream& vectorstream, std::string indir, std::string outdir, int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker, bool preindexed, std::string oovtoken, boost::optional<const std::string&> digit_rep, unsigned int prune, unsigned int fcachesize) {
   boost::unordered_map<std::string, int> vocabmap;
   std::vector<std::string> vocab;
   std::vector<float> idfs;
@@ -172,20 +172,29 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
   tfidfstream.close();
   vectorstream.close();
 
-  int startdoci, enddoci;
+  int oovi=0, startdoci, enddoci;
 
+  if(!preindexed) {
+    try {
+      oovi = vocabmap.at(oovtoken);
+    } catch(std::out_of_range& e) {
+      std::cerr<<"Error: OOV Token is not in the vocabulary in indexing mode\n";
+      return 4;
+    }
+  }
   try {
     startdoci = vocabmap.at(ssmarker);
-  }catch(std::out_of_range& e) {
-    std::cerr<<"Error: Start of sentence fill marker is not in the vocabulary.\n";
+  } catch(std::out_of_range& e) {
+    std::cerr<<"Error: Start of sentence fill token is not in the vocabulary.\n";
     return 5;
   }
   try {
     enddoci = vocabmap.at(esmarker);
-  }catch(std::out_of_range& e) {
-    std::cerr<<"Error: End of sentence fill marker is not in the vocabulary.\n";
+  } catch(std::out_of_range& e) {
+    std::cerr<<"Error: End of sentence fill token is not in the vocabulary.\n";
     return 6;
   }
+  
 	
   unsigned int vsize=vocab.size();
 
@@ -235,16 +244,16 @@ int extract_contexts(std::ifstream& vocabstream, std::ifstream& tfidfstream, std
 	for(unsigned int i=0; i<contextsize; i++) {
 	  if(getline(corpusreader,word)) {
 	    if(word == eodmarker) goto EOD;
-	    int wind=read_index(word, vocab.size());				  
+	    int wind = lookup_word(vocabmap, word, preindexed, oovi, digit_rep);
 	    context.push_back(wind);
 	  }
 	}
 
 	while(getline(corpusreader,word)) {
 	  if(word == eodmarker) goto EOD;
-	  int newind=read_index(word,vocab.size());
+	  int newind = lookup_word(vocabmap, word, preindexed, oovi, digit_rep);
 	  context.push_back(newind);
-	  int retcode=compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
+	  int retcode = compute_and_output_context(context, idfs, origvects,outfiles,vecdim,contextsize,vsize);
 	  if(retcode) return retcode;
 			  
 	  context.pop_front();
@@ -292,7 +301,7 @@ int main(int argc, char** argv) {
   int dim;
   unsigned int contextsize;
   std::string ssmarker, esmarker, eod;
-
+  std::string oovtoken, digit_rep;
   unsigned int prune=0;
   unsigned int fcachesize=0;
   po::options_description desc("CExtractContexts Options");
@@ -305,11 +314,21 @@ int main(int argc, char** argv) {
     ("outdir,o", po::value<std::string>(&outd)->value_name("<directory>")->required(), "directory to output contexts")
     ("dim,d", po::value<int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
-    ("eodmarker,e",po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"),"end of document marker")
-    ("ssmarker", po::value<std::string>(&ssmarker)->value_name("<string>")->default_value("<s>"),"start of sentence fill marker")
-    ("esmarker", po::value<std::string>(&esmarker)->value_name("<string>")->default_value("</s>"), "end sentence fill marker")
-     ("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab")
-    ("fcachesize,f", po::value<unsigned int>(&fcachesize)->value_name("<number>"), "maximum number of files to open at once");
+    ("prune,p",po::value<unsigned int>(&prune)->value_name("<number>"),"only output contexts for the first N words in the vocab")
+    ("fcachesize,f", po::value<unsigned int>(&fcachesize)->value_name("<number>"), "maximum number of files to open at once")
+    ;
+  po::options_description markers("Special Token Options");
+  add_eod_option(markers, &eod);
+  add_context_options(markers, &ssmarker, &esmarker);
+  desc.add(markers);
+
+  po::options_description indexing("Indexing Options");
+  indexing.add_options()("preindexed","corpus is already in indexed format");
+  add_indexing_options(indexing,&oovtoken,&digit_rep);
+  desc.add(indexing);
+
+
+  
 		
 	
     po::variables_map vm;
@@ -356,8 +375,11 @@ int main(int argc, char** argv) {
       std::cerr << "Input directory does not exist" <<std::endl;
       return 6;
     }
-
-    return extract_contexts(vocab, frequencies, vectors, corpusd, outd, dim, contextsize, eod, ssmarker, esmarker, prune, fcachesize);
+    boost::optional<const std::string&> digit_rep_arg;
+    if(!digit_rep.empty()) {
+      digit_rep_arg=digit_rep;
+    }
+    return extract_contexts(vocab, frequencies, vectors, corpusd, outd, dim, contextsize, eod, ssmarker, esmarker, vm.count("preindexed")>0, oovtoken, digit_rep_arg, prune, fcachesize);
 }
 
 

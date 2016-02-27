@@ -84,26 +84,6 @@ int deindex_corpus(fs::ifstream& vocabstream, fs::path& icorpus, fs::path& ocorp
   return 0;
 }
 
-static std::regex numregex("[-+]?\\d*\\.?\\d+", std::regex::ECMAScript | std::regex::optimize);
-static std::regex digitregex("\\d", std::regex::ECMAScript | std::regex::optimize);
-
-int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const std::string& word, int oovind, boost::optional<const std::string&> digit_rep) {
-  boost::unordered_map<std::string,int>::const_iterator index = vocabmap.find(word);
-  if(index != vocabmap.end()) {
-    return index->second;
-  }
-    
-  if(digit_rep.is_initialized()) {
-    if(std::regex_match(word,numregex)) {
-      std::string digified = std::regex_replace(word, digitregex, *digit_rep);
-      index=vocabmap.find(digified);
-      if(index !=vocabmap.end()){
-	return index->second;
-      }
-    }
-  }
-  return oovind;
-}
 
 
 int index_corpus(fs::ifstream& vocabstream, fs::path& icorpus, fs::path& ocorpus, const std::string& unktoken, std::string eodmarker, boost::optional<const std::string&> digit_rep) {
@@ -146,7 +126,7 @@ int index_corpus(fs::ifstream& vocabstream, fs::path& icorpus, fs::path& ocorpus
 	corpuswriter << eodmarker <<"\n";
 	continue;
       }
-      int ind = lookup_word(vocabmap, word, oov, digit_rep); 
+      int ind = lookup_word(vocabmap, word, false, oov, digit_rep); 
       corpuswriter << ind<<"\n";
     }
     
@@ -165,7 +145,7 @@ int main(int argc, char** argv) {
   std::string icorpusf;
   std::string ocorpusf;
 
-  std::string unktoken, eod;
+  std::string oovtoken, eod;
   std::string digit_rep;
   po::options_description desc("CRelabelCorpus Options");
   desc.add_options()
@@ -175,10 +155,13 @@ int main(int argc, char** argv) {
     ("vocab,v", po::value<std::string>(&vocabf)->value_name("<filename>")->required(), "original vocab file")
     ("icorpus,i", po::value<std::string>(&icorpusf)->value_name("<directory>")->required(), "input corpus")
     ("ocorpus,o", po::value<std::string>(&ocorpusf)->value_name("<directory>")->required(), "output relabeled corpus")
-    ("oovtoken", po::value<std::string>(&unktoken)->value_name("<string>")->default_value("uuunkkk"), "OOV token")
-    ("eodmarker", po::value<std::string>(&eod)->value_name("<string>")->default_value("eeeoddd"), "end of document marker")
-    ("digify", po::value<std::string>(&digit_rep)->value_name("<string>")->default_value("DG"), "digify OOV numbers by replacing all digits with the given string") 
     ;
+  add_eod_option(desc, &eod);
+  
+  po::options_description indexing("Indexing Options");
+  add_indexing_options(indexing, &oovtoken, &digit_rep);
+  desc.add(indexing);
+  
 	
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -222,7 +205,7 @@ int main(int argc, char** argv) {
   }
 
   if(vm.count("index")) {
-    return index_corpus(vocab, icorpus, ocorpus, unktoken, eod, digit_rep_arg);
+    return index_corpus(vocab, icorpus, ocorpus, oovtoken, eod, digit_rep_arg);
   } else {
     return deindex_corpus(vocab, icorpus, ocorpus, eod);
   }
