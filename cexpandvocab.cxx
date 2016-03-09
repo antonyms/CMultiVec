@@ -55,11 +55,11 @@ int expand_vocab(ClusterAlgos format, fs::ifstream& vocabin, fs::ofstream& vocab
 	fs::ifstream clusterfile(cfile);
 	std::string clustervec;
 	while(getline(clusterfile,clustervec)) {
-	  vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
+	  vocabout << std::setfill ('0') << std::setw (3) << defn++ <<word <<'\n';
 	  ocenterstream << clustervec << '\n';
 	}
       } else {
-	vocabout <<  std::setfill ('0') << std::setw (2) << 0 <<word <<'\n';
+	vocabout <<  std::setfill ('0') << std::setw (3) << 0 <<word <<'\n';
 	for(int i=0; i<dim; i++) { //Fill with zeros if there are no clusters
 	  ocenterstream << "0 ";
 	}
@@ -74,12 +74,12 @@ int expand_vocab(ClusterAlgos format, fs::ifstream& vocabin, fs::ofstream& vocab
       fs::path cfile=clusterpath / ss.str();
 		
       int defn=0;
-      vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
+      vocabout << std::setfill ('0') << std::setw (3) << defn++ <<word <<'\n';
       if(fs::exists(cfile)) {
 	fs::ifstream clusterfile(cfile);
 	std::string line;
 	while(getline(clusterfile,line)) {
-	  vocabout << std::setfill ('0') << std::setw (2) << defn++ <<word <<'\n';
+	  vocabout << std::setfill ('0') << std::setw (3) << defn++ <<word <<'\n';
 
 	  //Output the word number
 	  ocenterstream << index << '\n';

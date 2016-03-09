@@ -13,8 +13,8 @@ void add_context_options(po::options_description& desc, std::string* ssmarker, s
 }
 void add_indexing_options(po::options_description& desc, std::string* oovtoken, std::string* digit_rep) {
   desc.add_options()
-    ("oovtoken", po::value<std::string>(oovtoken)->value_name("<string>")->default_value("uuunkkk"), "OOV token")
-    ("digify", po::value<std::string>(digit_rep)->value_name("<string>")->default_value("DG"), "digify OOV numbers by replacing all digits with the given string")
+    ("oovtoken", po::value<std::string>(oovtoken)->value_name("<string>")->default_value("UUUNKKK"), "OOV token")
+    ("digify", po::value<std::string>(digit_rep)->value_name("<string>")->implicit_value("DG"), "digify OOV numbers by replacing all digits with the given string")
     ;
 }
 
@@ -53,13 +53,13 @@ int lookup_word(const boost::unordered_map<std::string, int>& vocabmap, const st
 }
 
 void compute_context(const boost::circular_buffer<int>& context, const std::vector<float>& idfs, const arma::fmat&  origvects, arma::fvec& outvec, unsigned int vecdim, unsigned int contextsize) {
-	
+
 	float idfc[2*contextsize+1]; //idf context window
 
 	//Look up the idfs of the words in context
 	std::transform(context.begin(),context.end(),idfc,[&idfs](int c) ->float {return idfs[c];});
 
-	float idfsum=std::accumulate(idfc,&idfc[contextsize],0)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],(float)0);
+	float idfsum=std::accumulate(idfc,&idfc[contextsize],0.0f)+std::accumulate(&idfc[contextsize+1],&idfc[2*contextsize+1],0.0f);
 	if(idfsum==0) {
 		return;
 	}
@@ -73,4 +73,5 @@ void compute_context(const boost::circular_buffer<int>& context, const std::vect
 		float idfterm=idfc[i]*invidfsum;
 		std::transform(outvec.begin(), outvec.end(),origvects.unsafe_col(context[i]).begin(), outvec.begin(),  [idfterm](float f1, float f2) -> float { return f1+f2*idfterm; });
 	}
+
 }

@@ -207,6 +207,14 @@ int main(int argc, char** argv) {
   if(vm.count("index")) {
     return index_corpus(vocab, icorpus, ocorpus, oovtoken, eod, digit_rep_arg);
   } else {
+    if(vm.count("oovtoken")) {
+      std::cerr << "Error: --oovtoken can only be used in indexing mode\n";
+      return 5;
+    }
+    if(vm.count("digify")) {
+      std::cerr << "Error: --digify can only be used in indexing mode\n";
+      return 6;
+    }
     return deindex_corpus(vocab, icorpus, ocorpus, eod);
   }
 

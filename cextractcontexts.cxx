@@ -321,65 +321,73 @@ int main(int argc, char** argv) {
   add_eod_option(markers, &eod);
   add_context_options(markers, &ssmarker, &esmarker);
   desc.add(markers);
-
+  
   po::options_description indexing("Indexing Options");
   indexing.add_options()("preindexed","corpus is already in indexed format");
   add_indexing_options(indexing,&oovtoken,&digit_rep);
   desc.add(indexing);
-
-
-  
-		
 	
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc, argv, desc), vm);
 
-    if (vm.count("help")) {
-      std::cout << desc << "\n";
-      return 0;
-    }
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    return 0;
+  }
 
-    try {
-      po::notify(vm);
-    } catch(po::required_option& exception) {
-      std::cerr << "Error: " << exception.what() << "\n";
-      std::cout << desc << "\n";
-      return 1;
-    }
+  try {
+    po::notify(vm);
+  } catch(po::required_option& exception) {
+    std::cerr << "Error: " << exception.what() << "\n";
+    std::cout << desc << "\n";
+    return 1;
+  }
 	
-    std::ifstream vocab(vocabf);
-    if(!vocab.good()) {
-      std::cerr << "Vocab file no good" <<std::endl;
-      return 2;
-    }
+  std::ifstream vocab(vocabf);
+  if(!vocab.good()) {
+    std::cerr << "Vocab file no good" <<std::endl;
+    return 2;
+  }
 
-    std::ifstream frequencies(idff);
-    if(!frequencies.good()) {
-      std::cerr << "Frequencies file no good" <<std::endl;
-      return 3;
-    }
+  std::ifstream frequencies(idff);
+  if(!frequencies.good()) {
+    std::cerr << "Frequencies file no good" <<std::endl;
+    return 3;
+  }
 
-    std::ifstream vectors(vecf);
-    if(!vectors.good()) {
-      std::cerr << "Vectors file no good" <<std::endl;
-      return 4;
-    }
+  std::ifstream vectors(vecf);
+  if(!vectors.good()) {
+    std::cerr << "Vectors file no good" <<std::endl;
+    return 4;
+  }
 
 
-    if(!boost::filesystem::is_directory(corpusd)) {
-      std::cerr << "Input directory does not exist" <<std::endl;
-      return 5;
-    }
+  if(!boost::filesystem::is_directory(corpusd)) {
+    std::cerr << "Input directory does not exist" <<std::endl;
+    return 5;
+  }
 
-    if(!boost::filesystem::is_directory(outd)) {
-      std::cerr << "Input directory does not exist" <<std::endl;
-      return 6;
+  if(!boost::filesystem::is_directory(outd)) {
+    std::cerr << "Input directory does not exist" <<std::endl;
+    return 6;
+  }
+  boost::optional<const std::string&> digit_rep_arg;
+  if(!digit_rep.empty()) {
+    digit_rep_arg=digit_rep;
+  }
+  bool preindexed=vm.count("preindexed")>0;
+  if(preindexed) {
+    if(vm.count("oovtoken")){
+      std::cerr <<"Error: --oovtoken is not applicable in preindexed mode\n";
+      return 7;
     }
-    boost::optional<const std::string&> digit_rep_arg;
-    if(!digit_rep.empty()) {
-      digit_rep_arg=digit_rep;
+    if(vm.count("digify")) {
+      std::cerr <<"Error: --digify is not applicable in preindexed mode\n";
+      return 7;
     }
-    return extract_contexts(vocab, frequencies, vectors, corpusd, outd, dim, contextsize, eod, ssmarker, esmarker, vm.count("preindexed")>0, oovtoken, digit_rep_arg, prune, fcachesize);
+  }
+
+  return extract_contexts(vocab, frequencies, vectors, corpusd, outd, dim, contextsize, eod, ssmarker, esmarker, preindexed, oovtoken, digit_rep_arg, prune, fcachesize);
 }
 
 

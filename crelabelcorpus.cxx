@@ -64,7 +64,7 @@ public:
       }
       getline(newvocabstream, newword);
       numcenters++;
-    } while(boost::algorithm::ends_with(newword,word));
+    } while(newword.substr(3) == word);
     
   }
   
@@ -95,12 +95,12 @@ class HaliteClassifier {
 public:
   HaliteClassifier(size_t vecdim): vecdim(vecdim) {
   }
-  void addClusters(size_t index, size_t& nextclusteridx, std::ifstream& haliteclustersfile) {
+  void addClusters(size_t index, int64_t& nextclusteridx, std::ifstream& haliteclustersfile) {
     classifiers.emplace_back();
     hl::Classifier<float>& cl=classifiers.back();
     cl.hardClustering=1;
-    
-    while(nextclusteridx == index) {
+
+    while(nextclusteridx == (int64_t)index) {
       cl.betaClusters.emplace_back(0, vecdim);
       hl::BetaCluster<float>& newcluster=cl.betaClusters.back();
 
@@ -121,7 +121,7 @@ public:
       for(size_t i=0; i<vecdim; i++) {
 	haliteclustersfile >> newcluster.max[i];
       }
-
+      nextclusteridx=-1;
       haliteclustersfile>>nextclusteridx;
     }
   }
@@ -130,10 +130,15 @@ public:
   
     arma::fvec c(vecdim, arma::fill::zeros);
     compute_context(context, idfs, origvects, c, vecdim, contextsize);
-
+    std::cout <<"vector " <<context[contextsize]<<"\n";
+    for(size_t i=0; i<c.n_rows; i++)
+      std::cout <<c[i] <<", ";
+    std::cout<<"\n";
     hl::Classifier<float>& classifier = classifiers[index];
-    size_t cluster = 0;
+    int cluster = -1;
     classifier.assignToClusters(c.memptr(), &cluster);
+    std::cout<<"assigned "<<cluster<<"\n";
+    cluster++;
     return cluster;
   }
   
@@ -142,7 +147,7 @@ public:
 };
 #endif
 
-int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker) {
+int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& newvocabstream,fs::ifstream& idfstream, fs::ifstream& vecstream, fs::ifstream& centerstream, fs::path& icorpus, fs::path& ocorpus, unsigned int vecdim, unsigned int contextsize, std::string eodmarker, std::string ssmarker, std::string esmarker, bool preindexed, std::string oovtoken, boost::optional<const std::string&> digit_rep) {
 
   boost::unordered_map<std::string, int> vocabmap;
   std::vector<std::string> vocab;
@@ -171,11 +176,13 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
   std::string word;
   std::string newword;
   getline(newvocabstream,newword);
-  size_t nextclusteridx;
+  int64_t nextclusteridx;
+  nextclusteridx=-1;
   centerstream >> nextclusteridx;
   while(getline(vocabstream,word)) {
     vocab.push_back(word);
-		
+    vocabmap[word]=index;
+    
     float idf;
     idfstream >> idf;
     idfs.push_back(idf);
@@ -196,19 +203,27 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
     index++;
   }
 
-  int startdoci, enddoci;
+  int oovi=0, startdoci, enddoci;
 
+  if(!preindexed) {
+    try {
+      oovi = vocabmap.at(oovtoken);
+    } catch(std::out_of_range& e) {
+      std::cerr<<"Error: OOV token '"<< oovtoken<<"'is not in the vocabulary.\n";
+      return 5;
+    }
+  }
   try {
     startdoci = vocabmap.at(ssmarker);
   } catch(std::out_of_range& e) {
-    std::cerr<<"Error: Start of sentence fill marker is not in the vocabulary.\n";
-    return 5;
+    std::cerr<<"Error: Start of sentence fill marker '"<<ssmarker<<"' is not in the vocabulary.\n";
+    return 6;
   }
   try {
     enddoci = vocabmap.at(esmarker);
   } catch(std::out_of_range& e) {
-    std::cerr<<"Error: End of sentence fill marker is not in the vocabulary.\n";
-    return 6;
+    std::cerr<<"Error: End of sentence fill marker '"<<esmarker<<"' is not in the vocabulary.\n";
+    return 7;
   }
   try {
     for (boost::filesystem::directory_iterator itr(icorpus); itr!=boost::filesystem::directory_iterator(); ++itr) {
@@ -238,7 +253,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 	for(unsigned int i=0; i<contextsize; i++) {
 	  if(getline(corpusreader,word)) {
 	    if(word == eodmarker) goto EOD;
-	    int wind=read_index(word,vocab.size());
+	    int wind=lookup_word(vocabmap, word, preindexed, oovi, digit_rep);
 
 	    context.push_back(wind);
 	  }
@@ -246,7 +261,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 
 	while(getline(corpusreader,word)) {
 	  if(word == eodmarker) goto EOD;
-	  int nextind=read_index(word, vocab.size());
+	  int nextind=lookup_word(vocabmap, word, preindexed, oovi, digit_rep);
 
 	  context.push_back(nextind);
 
@@ -261,7 +276,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 #endif
 	  }
 				
-	  corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
+	  corpuswriter <<  std::setfill ('0') << std::setw (3) << meaning << vocab[wid]<<'\n';
 	  context.pop_front();
 	}
       EOD:
@@ -282,7 +297,7 @@ int relabel_corpus(ClusterAlgos format, fs::ifstream& vocabstream,fs::ifstream& 
 #endif
 	  }
 
-	  corpuswriter <<  std::setfill ('0') << std::setw (2) << meaning << vocab[wid]<<'\n';
+	  corpuswriter <<  std::setfill ('0') << std::setw (3) << meaning << vocab[wid]<<'\n';
 	  context.pop_front();
 	  context.push_back(enddoci);
 	}
@@ -310,7 +325,7 @@ int main(int argc, char** argv) {
   unsigned int vecdim;
   unsigned int contextsize;
   std::string eod, ssmarker, esmarker;
-  std::string digit_rep;
+  std::string oovtoken, digit_rep;
   po::options_description desc("CRelabelCorpus Options");
   desc.add_options()
     ("help,h", "produce help message")
@@ -327,6 +342,15 @@ int main(int argc, char** argv) {
     ("contextsize,s", po::value<unsigned int>(&contextsize)->value_name("<number>")->default_value(5),"size of context (# of words before and after)")
     ;
 
+  po::options_description markers("Special Token Options");
+  add_eod_option(markers, &eod);
+  add_context_options(markers, &ssmarker, &esmarker);
+  desc.add(markers);
+
+  po::options_description indexing("Indexing Options");
+  indexing.add_options()("preindexed", "corpus is already in indexed format");
+  add_indexing_options(indexing, &oovtoken, &digit_rep);
+  desc.add(indexing);
 	
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -391,9 +415,23 @@ int main(int argc, char** argv) {
     std::cerr << "Output corpus directory does not exist" <<std::endl;
     return 8;
   }
+
+  bool preindexed=vm.count("preindexed")>0;
+  if(preindexed) {
+    if(vm.count("oovtoken")){
+      std::cerr <<"Error: --oovtoken is not applicable in preindexed mode\n";
+      return 7;
+    }
+    if(vm.count("digify")) {
+      std::cerr <<"Error: --digify is not applicable in preindexed mode\n";
+      return 7;
+    }
+  }
+  
   boost::optional<const std::string&> digit_rep_arg;
   if(!digit_rep.empty()) {
     digit_rep_arg=digit_rep;
   }
-  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, ssmarker, esmarker);
+
+  return relabel_corpus(format, oldvocab,newvocab,idf,vectors,centers,icorpus,ocorpus,vecdim,contextsize, eod, ssmarker, esmarker, preindexed, oovtoken, digit_rep_arg);
 }
