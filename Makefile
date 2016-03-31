@@ -1,7 +1,7 @@
 ENABLE_HALITE ?= 1
 ifeq ($(ENABLE_HALITE), 1)
     CFLAGS = -DENABLE_HALITE -Ihalite/include `pkg-config --cflags opencv`
-    LDFLAGS = halite/libhalite.a `pkg-config --libs opencv` -ldb_cxx
+    LDFLAGS = halite/libhalite.a `pkg-config --libs opencv` -llmdb
 endif
 
 

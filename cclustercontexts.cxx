@@ -49,7 +49,7 @@ namespace po=boost::program_options;
 namespace km=mlpack::kmeans;
 
 
-int cluster_contexts(ClusterAlgos algorithm, std::string& contextdir,const std::string& clusterdir, size_t numclust, size_t memlimitmb, const std::string& tmpdir, int vecdim) {
+int cluster_contexts(ClusterAlgos algorithm, std::string& contextdir,const std::string& clusterdir, size_t numclust, const std::string& tmpdir, int vecdim) {
   for (boost::filesystem::directory_iterator itr(contextdir); itr!=boost::filesystem::directory_iterator(); ++itr) {
     std::string path=itr->path().string();
     if(!boost::algorithm::ends_with(path,".vectors")) {
@@ -93,15 +93,8 @@ int cluster_contexts(ClusterAlgos algorithm, std::string& contextdir,const std::
       exit(1);
 #else
     hl::PackedArrayPointSource<float> pts(data.memptr(), vecdim, numpoints);
-
-    int numLevels = 4;
-    uint64_t memlimit=memlimitmb*1024*1024;
     
-    if(numLevels *  numpoints * vecdim * sizeof(float) > memlimit) {
-      std::cout<< "Database is potentially larger than the memory cache size.\n";
-      std::cout<< "Expect some files to be created in the temporary directory.\n";
-    }
-    hl::HaliteClustering<float> h(pts, true, memlimit, tmpdir);
+    hl::HaliteClustering<float> h(pts, true, tmpdir);
     h.findCorrelationClusters();
     shared_ptr<hl::Classifier<float> > classifier=h.getClassifier();
     classifier->denormalize();
@@ -138,8 +131,7 @@ int main(int argc, char** argv) {
   std::string contextdir;
   std::string clusterdir;
   size_t numclust;
-  size_t memlimitmb;
-  unsigned int dim;
+   unsigned int dim;
 
   std::string tmpdir;
   
@@ -155,7 +147,6 @@ int main(int argc, char** argv) {
     ("contexts,i", po::value<std::string>(&contextdir)->value_name("<directory>")->required(), "directory of contexts to cluster")
     ("clusters,o", po::value<std::string>(&clusterdir)->value_name("<directory>")->required(), "directory to output clusters")
     ("numclust,n", po::value<size_t>(&numclust)->value_name("<number>")->default_value(10),"number of clusters (kmeans only)")
-    ("memlimit,m", po::value<size_t>(&memlimitmb)->value_name("<megabytes>")->default_value(4000),"approximate cutoff for storing database in memory vs disk (halite only)")
     ("tmpdir,t", po::value<std::string>(&tmpdir)->value_name("<directory>")->default_value("."), "temporary directory for disk cache")
     ("dim,d", po::value<unsigned int>(&dim)->value_name("<number>")->default_value(50),"word vector dimension")
     ;
@@ -196,5 +187,5 @@ int main(int argc, char** argv) {
   }
 
 
-  return cluster_contexts(algorithm, contextdir, clusterdir, numclust, memlimitmb, tmpdir, dim);
+  return cluster_contexts(algorithm, contextdir, clusterdir, numclust, tmpdir, dim);
 }
